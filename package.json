@@ -1,0 +1,13 @@
+{
+  "name": "com.unity.mergeinstancing",
+  "displayName": "MergeInstancing System",
+  "version": "0.0.1-preview",
+  "unity": "2018.3",
+  "description": "",
+  "keywords": [""],
+  "category": "",
+  "dependencies": {
+    "com.unity.render-pipelines.universal": "12.1.10",
+    "com.unity.render-pipelines.core": "12.1.10"
+  }
+}
