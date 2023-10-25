@@ -2,6 +2,7 @@
 
 namespace EasyButtons
 {
+#if UNITY_EDITOR
     public enum ButtonMode
     {
         AlwaysEnabled,
@@ -77,5 +78,7 @@ namespace EasyButtons
             this.spacing = spacing;
         }
     }
+#endif
+   
 }
 

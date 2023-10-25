@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using NUnit.Framework;
 using Unity.MergeInstancingSystem.SpaceManager;
 using UnityEditor;
 using UnityEngine;
@@ -122,50 +123,99 @@ namespace Unity.MergeInstancingSystem.Utils
          public static AllInstanceData GetInstanceData(SpaceNode rootNode)
          {
              AllInstanceData result = new AllInstanceData();
+             List<NodeObject> useLightMapNode = new List<NodeObject>();
+             List<NodeObject> unuseLightMapNode = new List<NodeObject>();
              //将树按照后续遍历展开
              var postTreeList = rootNode.PostOrderTraversalConverList();
+             var classificationObjects = new Dictionary<long, NodeObject>();
              //每个 i 是一个 树的节点
              for (int i = 0; i < postTreeList.Count; i++)
              {
-                 Dictionary<string, List<NodeObject>> classificationObjects = new Dictionary<string, List<NodeObject>>();
-                 //一个节点的所有obj,先把树的节点里面的OBJ分类
-                 foreach (var node in postTreeList[i].Objects)
+                 var tempGameObjects = postTreeList[i].Objects;
+                 
+                 //tempGameObjects 是该节点保存的所有OBJ
+                 for (int j = 0; j < tempGameObjects.Count; j++)
                  {
-                     //会将一个Obj的所有Meshrender拿出来转换成NodeObject，不区分Lod
-                     var nodeObjects = node.ToNodeObject();
-                     foreach (var nodeObject in nodeObjects)
+                     //这里的gameobject都是一个根节点，其下包含LOD——Mesh0-n——SubMesh
+                     //跳过LOD级别直接拿一个GameObject下面的所有Meshrenderr，包含了不同Lod级别和同一个级别不同的Mesh
+                     var meshRenderers = tempGameObjects[j].GetComponentsInChildren<MeshRenderer>();
+                     foreach (var meshRenderer in meshRenderers)
                      {
-                         if (classificationObjects.TryGetValue(nodeObject.Identifier,out var c_nodeObjects))
-                         {
-                             c_nodeObjects.Add(nodeObject);
-                         }
-                         else
-                         {
-                             List<NodeObject> tempList = new List<NodeObject>();
-                             tempList.Add(nodeObject);
-                             classificationObjects.Add(nodeObject.Identifier,tempList);
-                         }
-                     }
-                 }
-                 //按照mesh 和 mat 分类好的Node 存数据
-                 foreach (var meshList in classificationObjects)
-                 {
-                     //这些所有的NodeObj是共享mesh和材质的
-                     foreach (var node in meshList.Value)
-                     {
-                         result.AddItem(node.m_mesh);
-                         var meshRenderer = node.m_renderer;
+                         var mats = meshRenderer.sharedMaterials;
+                         var mesh = meshRenderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
                          var light_mapindex = meshRenderer.lightmapIndex;
-                         bool m_NeedLightMap = (light_mapindex >=0 && light_mapindex < LightmapSettings.lightmaps.Length) ? true : false;
-                         result.AddItem(node.m_material);
-                         int Identifier = node.m_mesh.GetHashCode() + node.m_material.GetHashCode();
-                         result.CalculatorIdentifier(Identifier, m_NeedLightMap);
-                         result.AddItem(meshRenderer as Renderer);
+                         LightMode tempLightMode =  (light_mapindex >=0 && light_mapindex < LightmapSettings.lightmaps.Length) ? LightMode.LightMap : LightMode.LightProbe;
+                         //按照subMesh区分
+                         for (int k = 0; k < mats.Length; k++)
+                         {
+                             var mat = mats[k];
+                             int meshHash = mesh.GetHashCode();
+                             int matHash = mat.GetHashCode();
+                             long inde = long.Parse($"{meshHash}{matHash}");
+                             if (classificationObjects.TryGetValue(inde,out var nodeObject))
+                             {
+                                 MinGameObject temMinGameObj = new MinGameObject(meshRenderer,k,tempLightMode == LightMode.LightMap);
+                                 if (tempLightMode != nodeObject.m_lightMode)
+                                 {
+                                     EditorUtility.DisplayDialog("警告", $"有OBJ的光照模型与所属类不同，请检查后重新设置,OBJ使用的是{meshRenderer.gameObject.name}", "确定");
+                                 }
+                                 nodeObject.AddMinGameObj(temMinGameObj);
+                             }
+                             else
+                             {
+                                 NodeObject temNodeobj = new NodeObject(k,mesh,mat,inde,meshRenderer as  Renderer);
+                                 MinGameObject temMinGameObj = new MinGameObject(meshRenderer,k,tempLightMode == LightMode.LightMap);
+                                 temNodeobj.AddMinGameObj(temMinGameObj);
+                                 classificationObjects.Add(inde,temNodeobj);
+                             }
+                         }
                      }
                  }
+                 //将按照标识符（mesh——mat）分类的Node再按照是否使用lightmap分类，保证GIData和Matrix的位置一致.
+                 foreach (var VARIABLE in classificationObjects)
+                 {
+                     if (VARIABLE.Value.m_lightMode == LightMode.LightMap)
+                     {
+                         useLightMapNode.Add(VARIABLE.Value);
+                     }
+                     else
+                     {
+                         unuseLightMapNode.Add(VARIABLE.Value);
+                     }
+                 }
+
                  classificationObjects.Clear();
              }
-             
+
+             foreach (var nodeObject in useLightMapNode)
+             {
+                 //一个nodeObject 是一种类型的mesh+mat，里面有很多的小的可渲染单位
+                 if (nodeObject.m_lightMode == LightMode.LightMap)
+                 {
+                     result.AddNodeObject(nodeObject,true);
+                 }
+             }
+             foreach (var nodeObject in unuseLightMapNode)
+             {
+                 if (nodeObject.m_lightMode == LightMode.LightProbe)
+                 {
+                     result.AddNodeObject(nodeObject,false);
+                 }
+             }
+             useLightMapNode.Clear();
+             unuseLightMapNode.Clear();
+             //--------------------------------- 树分布 ---------------------------------------
+             //                                   [0]
+             //             [1]           [2]              [3]               [4]       
+             //        [5][6][7][8]  [9][10][11][12] [13][14][15][16] [17][18][19][20] 
+             //--------------------------   AllInstanceData 内数据分布 --------------------------
+             //                                 使用LightMap                    
+             //  [[5][6][7][8][1][9][10][11][12][2][13][14][15][16][3][17][18][19][20][4][0]]--
+             //                                 不使用LightMap
+             //  [[5][6][7][8][1][9][10][11][12][2][13][14][15][16][3][17][18][19][20][4][0]]--
+             //---------------------------------- 单独节点内 ------------------------------------
+             //---------- [[(Mesh+Mat_1)][(Mesh+Mat_2)][(Mesh+Mat_3)][(Mesh+Mat_4)]] ----------
+             //--------------------------------------------------------------------------------
              return result;
          }
          public static Bounds GetObjBounds(GameObject gameObject)

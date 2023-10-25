@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using Unity.MergeInstancingSystem.Utils;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -7,72 +9,52 @@ using UnityEngine.Rendering.Universal;
 namespace Unity.MergeInstancingSystem
 {
     [Serializable]
-    public class InstanceData :ScriptableObject, ISerializationCallbackReceiver
+    public class InstanceData : ScriptableObject, ISerializationCallbackReceiver
     {
-        [Serializable]
-        public struct MaterialPropertyData
-        {
-            public int material_ID;
-            public string name;
-            public Byte[] m_vaule;
-        }
-        
-        [SerializeField]
-        public List<Mesh> m_meshs;
-        /// <summary>
-        /// 材质的引用次数
-        /// </summary>
-        [SerializeField]
-        public int[] m_matCitationNumber;
-        
-        [SerializeField]
-        public List<Material> m_materials;
-        
-        [SerializeField]
-        public Matrix4x4[] m_localToWorlds;
 
-        [SerializeField] 
-        public List<int> m_matAndMeshIdentifiers;
-    
-        [SerializeField]
-        public List<int> m_identifierCounts;
-        
-        /// <summary>
-        /// 当前标识符的光照采用的是LightMap还是LightProbe
-        /// </summary>
-        [SerializeField]
-        public List<bool> m_identifierUseLightMapOrProbe;
+        [SerializeField] public List<Mesh> m_meshs;
 
-        [SerializeField]
-        public float[] m_lightMapIndex;
-        
-        
-        [SerializeField]
-        public Vector4[] m_lightMapScaleOffset;
-        
-        //------------- 不存LightProbe ------------------------------------ 
-        // [SerializeField]
-        // public SphericalHarmonicsL2[] m_LightProbes;
- 
-        [SerializeField]
-        private MaterialPropertyData[] m_matPropertyDatas;
+        [SerializeField] public List<Material> m_materials;
+
+        [SerializeField] public List<RenderClassState> m_renderClass;
+
+        [SerializeField] public UnityEngine.Matrix4x4[] m_Matrix4X4sData;
+
+        [SerializeField] public float[] m_LightMapIndexsData;
+
+        [SerializeField] public Vector4[] m_LightMapOffsetsData;
 
         public int GetLocalToWorldMatrix4x4Count()
         {
-            return m_localToWorlds.Length;
+            return m_Matrix4X4sData.Length;
         }
+
         public void BatchMaterial()
         {
-            
+
         }
+
         public void OnBeforeSerialize()
         {
-           
+
         }
 
         public void OnAfterDeserialize()
         {
-           
+
         }
+
+#if UNITY_EDITOR
+        [EasyButtons.Button]
+        public void CalculateCount()
+        {
+            int count = 0;
+            foreach (var VARIABLE in m_renderClass)
+            {
+                count += VARIABLE.m_citations;
+            }
+            EditorUtility.DisplayDialog("结果", $"总矩阵个数为{count}", "确定");
+        }
+#endif
     }
 }

@@ -42,7 +42,7 @@ namespace Unity.MergeInstancingSystem.Pool
         /// </summary>
         private readonly int MAX_BUFFCOUNT = 1000;
 
-        private readonly int EXPANDE_NUMBER = 2;
+        private readonly int EXPANDE_NUMBER = 1;
         /// <summary>
         /// 渲染数据存放的地方，一个pool是一千的容量
         /// </summary>
@@ -125,7 +125,7 @@ namespace Unity.MergeInstancingSystem.Pool
             return m_item;
         }
         /// <summary>
-        /// 加一个元素
+        /// 加一个元素,有装箱拆箱的问题
         /// </summary>
         /// <param name="item"></param>
         public void Add(object item)
@@ -136,7 +136,6 @@ namespace Unity.MergeInstancingSystem.Pool
                 Expande();
                 m_Index += 1;
             }
-
             var pool = m_item[m_Index];
             pool.OnePool[pool.length] = (T)item;
             pool.length += 1;
@@ -183,6 +182,7 @@ namespace Unity.MergeInstancingSystem.Pool
             }
             m_Index = 0;
         }
+
         /// <summary>
         /// 如果塞满了，再加两个
         /// </summary>
@@ -194,7 +194,7 @@ namespace Unity.MergeInstancingSystem.Pool
                 m_item.Add(temp);
             }
         }
-        
+
         public void Destory()
         {
             foreach (var pool in m_item)

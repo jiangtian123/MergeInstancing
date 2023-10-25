@@ -5,63 +5,43 @@ using UnityEngine.Rendering;
 
 namespace Unity.MergeInstancingSystem.Utils
 {
-    public static class GameObjectExtension
+    public enum LightMode
     {
-        public static List<NodeObject> ToNodeObject(this GameObject obj)
-        {
-            List<NodeObject> result = new List<NodeObject>();
-            var meshRenderers = obj.GetComponentsInChildren<MeshRenderer>();
-            foreach (var meshRenderer in meshRenderers)
-            {
-                var renderer = meshRenderer as Renderer;
-                var mats = renderer.sharedMaterials;
-                for (int i = 0; i < mats.Length; i++)
-                {
-                    NodeObject tempNode = new NodeObject();
-                    tempNode.FromGameObject(renderer,i,mats[i]);
-                    result.Add(tempNode);
-                }
-            }
-            
-            return result;
-        }
+        LightMap,
+        LightProbe
     }
     /// <summary>
-    /// 按照SubMesh和材质分组
+    /// 同一种Mesh和材质组成，有共同的光照模型
     /// </summary>
     public class NodeObject
     {
-        public string Identifier
-        {
-            get
-            {
-                return $"{m_meshGUID}+{m_matGUID}";
-            }
-        }
-        public string m_matGUID;
-
-        public string m_meshGUID;
-
-        public int m_subMeshIndex;
-        public bool m_NeedLightMap;
+        /// <summary>
+        /// 这个数据最后会变成 head 加 length的格式
+        /// </summary>
+        public List<MinGameObject> m_gameobjs;
+        public long Identifier;
         public Mesh m_mesh;
-        public bool m_castShadow;
+        public Material m_mat;
+        public LightMode m_lightMode;
         public RendererQueue m_queue;
-        public Material m_material;
-        public Renderer m_renderer;
-
-        public void FromGameObject(Renderer renderer,int subMeshIndex,Material material)
+        public int subMeshIndex;
+        public bool m_castShadow;
+        public NodeObject(int subMesh,Mesh mesh,Material mat,long identifier,Renderer renderer)
         {
-            m_mesh = (renderer as MeshRenderer)?.GetComponent<MeshFilter>().sharedMesh;
-            m_subMeshIndex = subMeshIndex;
-            m_material = material;
-            m_matGUID = material.GetHashCode().ToString();//ObjectUtils.GetAssetGuid(material);
-            m_meshGUID = m_mesh.GetHashCode().ToString();// ObjectUtils.GetAssetGuid(m_mesh);
-            m_renderer = renderer;
-            m_castShadow = renderer.shadowCastingMode == ShadowCastingMode.On;
-            m_queue = m_material.renderQueue < 3000 ? RendererQueue.Opaque : RendererQueue.Transparent;
             var light_mapindex = renderer.lightmapIndex;
-            m_NeedLightMap = (light_mapindex >=0 && light_mapindex < LightmapSettings.lightmaps.Length) ? true : false;
+            subMeshIndex = subMesh;
+            m_castShadow = renderer.shadowCastingMode == ShadowCastingMode.Off ? false : true;
+            m_lightMode = (light_mapindex >=0 && light_mapindex < LightmapSettings.lightmaps.Length) ? LightMode.LightMap : LightMode.LightProbe;
+            m_queue = mat.renderQueue > 2500 ? RendererQueue.Transparent : RendererQueue.Opaque;
+            m_mat = mat;
+            m_mesh = mesh;
+            Identifier = identifier;
+            m_gameobjs = new List<MinGameObject>();
+        }
+
+        public void AddMinGameObj(MinGameObject gameObject)
+        {
+            m_gameobjs.Add(gameObject);
         }
     }
 }

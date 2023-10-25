@@ -12,8 +12,15 @@ namespace Unity.MergeInstancingSystem.SpaceManager
         private Vector3 camPosition;
 
         private Camera m_camera;
+
+        private List<Vector3> points;
         public QuadTreeSpaceManager()
         {
+            points = new List<Vector3>(8);
+            for (int i = 0; i < 8; i++)
+            {
+                points.Add(new Vector3());
+            }
         }
         /// <summary>
         /// 将相机转到根节点所在的空间中
@@ -71,7 +78,7 @@ namespace Unity.MergeInstancingSystem.SpaceManager
         /// <returns></returns>
         public bool IsCull(float cullDistance, Bounds bounds)
         {
-            var planes =  GeometryUtility.CalculateFrustumPlanes(m_camera);
+            var planes =  CameraRecognizerManager.ActiveRecognizer.planes;
             if (!GeometryUtility.TestPlanesAABB(planes,bounds))
             {
                 return true;
@@ -83,6 +90,7 @@ namespace Unity.MergeInstancingSystem.SpaceManager
             float relativeHeight = distance / (camer_farDis + bais);
             return relativeHeight > 1 - cullDistance;
         }
+        //----------- 这个地方有点问题，每帧GC很多 ------------------------------------------------。
         /// <summary>
         /// 如果包围盒有一个顶点在视锥体的外面就返回false
         /// </summary>
@@ -90,31 +98,40 @@ namespace Unity.MergeInstancingSystem.SpaceManager
         /// <returns></returns>
         public bool IsBOXInsideViewFrustum(Bounds box)
         {
-            var frustumPlanes = GeometryUtility.CalculateFrustumPlanes(m_camera);
-            List<Vector3> points = new List<Vector3>();
-            Vector3 min =box.min;
+            var frustumPlanes = CameraRecognizerManager.ActiveRecognizer.planes;
+            Vector3 min = box.min;
             Vector3 max = box.max;
-            points.Add(new Vector3(min.x, min.y, min.z));
-            points.Add(new Vector3(min.x, min.y, max.z));
-            points.Add( new Vector3(max.x, min.y, max.z));
-            points.Add( new Vector3(max.x, min.y, min.z));
+            points[0] = new Vector3(min.x, min.y, min.z);
+            points[1] = new Vector3(min.x, min.y, max.z);
+            points[2] = new Vector3(max.x, min.y, max.z);
+            points[3] = new Vector3(max.x, min.y, min.z);
 
-            points.Add(new Vector3(min.x, max.y, min.z));
-            points.Add(new Vector3(min.x, max.y, max.z));
-            points.Add(new Vector3(max.x, max.y, max.z));
-            points.Add(new Vector3(max.x, max.y, min.z));
+            points[4] = new Vector3(min.x, max.y, min.z);
+            points[5] = new Vector3(min.x, max.y, max.z);
+            points[6] = new Vector3(max.x, max.y, max.z);
+            points[7] = new Vector3(max.x, max.y, min.z);
             foreach (var point in points)
             {
-                for (int i = 0; i < 6; i++)
+                //左面
+                if (!frustumPlanes[0].GetSide(point))
                 {
-                    if (!frustumPlanes[i].GetSide(point))
-                    {
-                        return false;
-                    }
+                    return true;
+                }
+                //右面
+                if (!frustumPlanes[1].GetSide(point))
+                {
+                    return true;
+                }
+                //前面
+                if (!frustumPlanes[4].GetSide(point))
+                {
+                    return true;
                 }
             }
-            return true;
+
+            return false;
         }
+
         /// <summary>
         /// 计算包围盒和相机在xz平面上的距离
         /// </summary>

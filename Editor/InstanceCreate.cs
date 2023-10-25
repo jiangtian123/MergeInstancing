@@ -213,6 +213,7 @@ namespace Unity.MergeInstancingSystem
                 for (int ri = 0; ri < rootNodeList.Count; ++ri)
                 {
                     var rootNode = rootNodeList[ri];
+                    AllInstanceData instanceData = ObjectUtils.GetInstanceData(rootNode);
                     //先将树中的Obj按照材质和Mesh分类
                     //之前有个BUG，拿的是所有的LOD级别的，应该只拿第一层级的
                     rootNode.ClassificationTree();
@@ -220,7 +221,7 @@ namespace Unity.MergeInstancingSystem
                     List<InstanceBuildInfo> buildInfos = CreateBuildInfo(ins, rootNode, ins.MinObjectSize);
 
                     //得到的是 按照后序遍历展开的四叉树的节点中的 Instance 信息
-                    AllInstanceData instanceData = ObjectUtils.GetInstanceData(rootNode);
+                    
                     //--------------------------- 到这里的数据 ----------------------------------------------------------------------------------
                     // 1. 四叉树，每个节点有按照包围盒放进去的 Object
                     // 2. InstanceBuildInfo ， 按层展开的四叉树，每个节点对应一个四叉树的节点，存放的是包含子节点物体在内的所有 renderer（按层级取不同的lod）。
@@ -252,7 +253,7 @@ namespace Unity.MergeInstancingSystem
                         (IInstanceBuild)Activator.CreateInstance(ins.BuildType,
                             new object[] { ins, ri, ins.BuildOptions });
                     builder.Build(rootNode, buildInfos, instanceData, targetGameObject, ins.CullDistance,
-                        ins.LODDistance, false,ins.USEMOTIONVECTOR,
+                        ins.LODDistance, false,ins.UseMotionvector,ins.PreciseCulling,
                         true,
                         progress =>
                         {

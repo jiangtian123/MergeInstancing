@@ -43,6 +43,9 @@ namespace Unity.MergeInstancingSystem
 
         private bool m_enableAutoHighestPrioritySetting = true;
         private CameraRecognizer m_activeRecognizer = null;
+        /// <summary>
+        /// 存放一个场景中所有带CameraRecognizer的相机的List，会按照ID排序
+        /// </summary>
         private List<CameraRecognizer> m_recognizers = new List<CameraRecognizer>();
         
         public void RegisterRecognizer(CameraRecognizer recognizer)
@@ -86,7 +89,9 @@ namespace Unity.MergeInstancingSystem
                 }
             }
         }
-
+        /// <summary>
+        /// 拿到序列号最高的
+        /// </summary>
         public void ActiveHighestPriority()
         {
             if (m_recognizers.Count > 0)

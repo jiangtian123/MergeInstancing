@@ -41,5 +41,13 @@ namespace Unity.MergeInstancingSystem.Utils
             }
             return result;
         }
+
+        public static void AddLikeHashSet<T>(this List<T> array,T value)
+        {
+            if (!array.Contains(value))
+            {
+                array.Add(value);
+            }
+        }
     }
 }

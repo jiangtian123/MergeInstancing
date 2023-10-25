@@ -16,6 +16,9 @@ namespace Unity.MergeInstancingSystem
         private bool m_UseMotionvector = false;
         
         [SerializeField]
+        private bool m_PreciseCulling;
+        
+        [SerializeField]
         private float m_LODDistance = 0.3f;
         
         [SerializeField]
@@ -73,11 +76,19 @@ namespace Unity.MergeInstancingSystem
             get { return m_ChunkSize; }
         }
 
-        public bool USEMOTIONVECTOR
+        public bool UseMotionvector
         {
             get
             {
                 return m_UseMotionvector;
+            }
+        }
+
+        public bool PreciseCulling
+        {
+            get
+            {
+                return m_PreciseCulling;
             }
         }
         public float LODDistance

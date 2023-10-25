@@ -77,7 +77,7 @@ namespace Unity.MergeInstancingSystem.Render
                 if (!success)
                     return SetupForEmptyRendering(ref renderingData);
             }
-            ShadowMapTextureManager.Instance.InitializeTexture(renderTargetWidth,renderTargetHeight);
+            ShadowMapTextureManager.Instance.InitializeTexture(renderTargetWidth, renderTargetHeight);
             m_instanceLightShadowmapTexture = ShadowMapTextureManager.Instance.RenderTexture;
             m_MaxShadowDistanceSq = renderingData.cameraData.maxShadowDistance * renderingData.cameraData.maxShadowDistance;
             m_CascadeBorder = renderingData.shadowData.mainLightShadowCascadeBorder;
@@ -93,7 +93,7 @@ namespace Unity.MergeInstancingSystem.Render
         {
             if (!renderingData.cameraData.renderer.stripShadowsOffVariants)
                 return false;
-            ShadowMapTextureManager.Instance.InitializeTexture(1, 1);
+            ShadowMapTextureManager.Instance.InitializeTexture(renderTargetWidth, renderTargetHeight);
             m_instanceLightShadowmapTexture =  ShadowMapTextureManager.Instance.RenderTexture;
             m_CreateEmptyShadowmap = true;
             return true;

@@ -25,8 +25,8 @@ namespace Unity.MergeInstancingSystem.Controller
         public void Awake()
         {
             m_spaceManager = new QuadTreeSpaceManager();
-            m_positionPoolMap = new Dictionary<int, PoolID>();
-            m_renderInfo = new Dictionary<int, RendererInfo>();
+            m_positionPoolMap = new Dictionary<long, PoolID>();
+            m_renderInfo = new Dictionary<long, RendererInfo>();
         }
         
         public void Start()
@@ -46,10 +46,6 @@ namespace Unity.MergeInstancingSystem.Controller
                 ID.m_lightMapIndexId = PoolManager.Instance.AllocatFloatPool(count);
                 ID.m_lightMapScaleOffsetID = PoolManager.Instance.AllocatVector4Pool(count);
             }
-            // else
-            // {
-            //     ID.m_lightProbeID = PoolManager.Instance.AllocatLightProbePool(count);
-            // }
             return ID;
         }
         public void OnEnable()
@@ -60,17 +56,13 @@ namespace Unity.MergeInstancingSystem.Controller
             try
             {
                 // m_matAndMeshIdentifiers : 每种Mesh-Mat搭配的唯一标识符
-                var matAndMeshIdentifiers = m_instanceData.m_matAndMeshIdentifiers;
-                // m_identifierCounts :上面的标识符表示的这种类型有多少个实例需要渲染
-                var identifierCounts = m_instanceData.m_identifierCounts;
-                // m_identifierUseLightMapOrProbe ：这种类型需要LightMap吗
-                var useLightMap = m_instanceData.m_identifierUseLightMapOrProbe;
-                for (int i = 0; i < matAndMeshIdentifiers.Count; i++)
+                var renderClassStates = m_instanceData.m_renderClass;
+                for (int i = 0; i < renderClassStates.Count; i++)
                 {
                     //Count 是该批次有多少个OBJ
-                    var count = identifierCounts[i];
-                    var identifier = matAndMeshIdentifiers[i];
-                    bool useLightMapOrProbe = useLightMap[i];
+                    var count = renderClassStates[i].m_citations;
+                    var identifier = renderClassStates[i].m_identifier;
+                    bool useLightMapOrProbe = renderClassStates[i].m_useLightMap;
                     var id =  InitPoolWithInstanceData(count,useLightMapOrProbe);
                     m_positionPoolMap.Add(identifier,id);
                 }
@@ -106,12 +98,12 @@ namespace Unity.MergeInstancingSystem.Controller
         /// <summary>
         /// 每种类型的DC对应一个Poll,需要在disable的时候清理
         /// </summary>
-        private Dictionary<int, PoolID> m_positionPoolMap;
+        private Dictionary<long, PoolID> m_positionPoolMap;
         
         /// <summary>
         /// 每种渲染类型对应的渲染数据,渲染类型指的是Mesh+Mat的唯一组合,需要每帧清理
         /// </summary>
-        private Dictionary<int, RendererInfo> m_renderInfo;
+        private Dictionary<long, RendererInfo> m_renderInfo;
 
         private ISpaceManager m_spaceManager;
         
@@ -216,7 +208,7 @@ namespace Unity.MergeInstancingSystem.Controller
                 {
                     var mesh = m_instanceData.m_meshs[nodeData.m_meshIndex];
                     var mat = m_instanceData.m_materials[nodeData.m_material];
-                    int identifier = nodeData.m_identifier;
+                    long identifier = nodeData.m_identifier;
                     if (m_renderInfo.TryGetValue(identifier,out var rendererInfo))
                     {
                         rendererInfo.m_CameraDis = dis;
@@ -255,33 +247,69 @@ namespace Unity.MergeInstancingSystem.Controller
         /// <param name="cullOBJ">是否挨个剔除节点中的OBJ</param>
         private void AddDataToPool(NodeData nodeData,RendererInfo rendererInfo,bool cullOBJ)
         {
+            Profiler.BeginSample("Begin AddDataToPool");
             var poolId = rendererInfo.m_poolID;
-            var Matrix4x4Source = m_instanceData.m_localToWorlds;
-            var lightMapIndexSource = m_instanceData.m_lightMapIndex;
-            var lightMapScaleOffsetSource = m_instanceData.m_lightMapScaleOffset;
+            var Matrix4x4Source = m_instanceData.m_Matrix4X4sData;
+            var lightMapIndexSource = m_instanceData.m_LightMapIndexsData;
+            var lightMapScaleOffsetSource = m_instanceData.m_LightMapOffsetsData;
             //var LightProbesSource = m_instanceData.m_LightProbes;
-            var matrix4x4data = nodeData.m_matrix4x4Data;
-            var giData = nodeData.m_GIData;
-            foreach (var listInfo in matrix4x4data)
+            var renderDataList = nodeData.m_RenderData;
+            //这里之前有GC
+            var planes = CameraRecognizerManager.ActiveRecognizer.planes;
+            foreach (var listInfo in renderDataList)
             {
-                int head = listInfo.head;
-                int length = listInfo.length;
-                rendererInfo.m_renderCount += length;
-                PoolManager.Instance.CopyData(poolId.m_matrix4x4ID,Matrix4x4Source,head,length);
-            }
-            //分开拷贝矩阵数据和GI数据
-            foreach (var gInfo in giData)
-            {
-                int head = gInfo.head;
-                int length = gInfo.length;
-                bool useLightMap = nodeData.m_NeedLightMap;
-                if (useLightMap && head >=0)
+                if (cullOBJ)
                 {
-                    PoolManager.Instance.CopyData(poolId.m_lightMapIndexId,lightMapIndexSource,head,length);
-                    PoolManager.Instance.CopyData(poolId.m_lightMapScaleOffsetID,lightMapScaleOffsetSource,head,length);
+                    var localBounds = rendererInfo.m_mesh.bounds;
+                    for (int i = 0; i < listInfo.length; i++)
+                    {
+                        int index = listInfo.head + i;
+                        var localToWorld = m_instanceData.m_Matrix4X4sData[index];
+                        var worldBounds = TransformBoundsToWorldBounds(localToWorld, localBounds);
+                        if (GeometryUtility.TestPlanesAABB(planes, worldBounds))
+                        {
+                            rendererInfo.m_renderCount += 1;
+                            PoolManager.Instance.CopyData(poolId.m_matrix4x4ID,m_instanceData.m_Matrix4X4sData,listInfo.head + i,1);
+                            if (nodeData.m_NeedLightMap)
+                            {
+                                PoolManager.Instance.CopyData(poolId.m_lightMapIndexId,m_instanceData.m_LightMapIndexsData,listInfo.head + i,1);
+                                PoolManager.Instance.CopyData(poolId.m_lightMapScaleOffsetID,m_instanceData.m_LightMapOffsetsData,listInfo.head + i,1);
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    int head = listInfo.head;
+                    int length = listInfo.length;
+                    rendererInfo.m_renderCount += length;
+                    PoolManager.Instance.CopyData(poolId.m_matrix4x4ID,Matrix4x4Source,head,length);
+                    if (nodeData.m_NeedLightMap && head >=0)
+                    {
+                        PoolManager.Instance.CopyData(poolId.m_lightMapIndexId,lightMapIndexSource,head,length);
+                        PoolManager.Instance.CopyData(poolId.m_lightMapScaleOffsetID,lightMapScaleOffsetSource,head,length);
                    
+                    }
                 }
             }
+            Profiler.EndSample();
+        }
+        //----------- 
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="matrix"></param>
+        /// <param name="localBounds"></param>
+        /// <returns></returns>
+        Bounds TransformBoundsToWorldBounds(UnityEngine.Matrix4x4 matrix, Bounds localBounds)
+        {
+            var position = matrix.GetPosition();
+            Vector3 worldAABBMin = localBounds.min + position;
+            Vector3 worldAABBMax = localBounds.max + position;
+            Vector3 center = (worldAABBMin + worldAABBMax) * 0.5f;
+            Vector3 size = worldAABBMax - worldAABBMin;
+            Bounds worldBounds = new Bounds(center,size);
+            return worldBounds;
         }
         /// <summary>
         /// 更新四叉树
@@ -364,9 +392,9 @@ namespace Unity.MergeInstancingSystem.Controller
             {
                 int meshIndex = nodeData.m_meshIndex;
                 int meshCount = 0;
-                for (int i = 0; i < nodeData.m_matrix4x4Data.Count; i++)
+                for (int i = 0; i < nodeData.m_RenderData.Count; i++)
                 {
-                    meshCount += nodeData.m_matrix4x4Data[i].length;
+                    meshCount += nodeData.m_RenderData[i].length;
                 }
                 var mesh = m_instanceData.m_meshs[meshIndex];
                 HighVSCount += mesh.vertexCount * meshCount;
@@ -375,9 +403,9 @@ namespace Unity.MergeInstancingSystem.Controller
             {
                 int meshIndex = nodeData.m_meshIndex;
                 int meshCount = 0;
-                for (int i = 0; i < nodeData.m_matrix4x4Data.Count; i++)
+                for (int i = 0; i < nodeData.m_RenderData.Count; i++)
                 {
-                    meshCount += nodeData.m_matrix4x4Data[i].length;
+                    meshCount += nodeData.m_RenderData[i].length;
                 }
                 var mesh = m_instanceData.m_meshs[meshIndex];
                 LowVSCount += mesh.vertexCount * meshCount;
@@ -469,13 +497,6 @@ namespace Unity.MergeInstancingSystem.Controller
                     }
                 }
             }
-        }
-        Bounds TransformBoundsToWorldBounds(UnityEngine.Matrix4x4 matrix, Bounds localBounds)
-        {
-            Vector3 center = matrix.MultiplyPoint(localBounds.center);
-            Vector3 size = matrix.MultiplyVector(localBounds.size);
-
-            return new Bounds(center, size);
         }
         #endregion
 #endif

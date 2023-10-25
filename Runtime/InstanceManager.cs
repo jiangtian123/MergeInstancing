@@ -242,7 +242,7 @@ namespace Unity.MergeInstancingSystem
             {
                 m_activeControllers[i].UpdateCull(cam);
             }
-            //m_OpaqueRender.DrawInstance(m_OpaqueRenderlist,cam);
+            
         }
         
         //-------------------------- 渲染结束后，清理渲染数据 ---------------------------------------------

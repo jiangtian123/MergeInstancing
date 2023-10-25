@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using Unity.MergeInstancingSystem.CreateUtils;
 using Unity.MergeInstancingSystem.Utils;
+using UnityEditor;
 using UnityEngine;
 namespace Unity.MergeInstancingSystem.SpaceManager
 {
@@ -50,8 +51,10 @@ namespace Unity.MergeInstancingSystem.SpaceManager
             set { m_bounds = value;}
             get { return m_bounds; }
         }
-
-        public Dictionary<string, List<NodeObject>> classificationObjects = new Dictionary<string, List<NodeObject>>();
+        /// <summary>
+        /// 取Lod0 级别的Obj 分类
+        /// </summary>
+        public Dictionary<long, NodeObject> classificationObjects = new Dictionary<long, NodeObject>();
 
         public List<GameObject> Objects
         {
@@ -116,22 +119,32 @@ namespace Unity.MergeInstancingSystem.SpaceManager
                 //拿到的是所有Lod0级别的MeshRender
                 var Lod0Obj = GetMeshRenderer.GetMeshRenderers(objcet,0.01f);
                 //将Lod0级别的Meshrender转换成NodeObject
-                List<NodeObject> cos = new List<NodeObject>();
-                foreach (var lod0 in Lod0Obj)
+                foreach (var meshRenderer in Lod0Obj)
                 {
-                    cos.AddRange(lod0.gameObject.ToNodeObject());
-                }
-                foreach (var co in cos)
-                {
-                    if (classificationObjects.TryGetValue(co.Identifier, out var nodeObject))
+                    var mats = meshRenderer.sharedMaterials;
+                    var mesh = meshRenderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
+                    var light_mapindex = meshRenderer.lightmapIndex;
+                    LightMode tempLightMode =  (light_mapindex >=0 && light_mapindex < LightmapSettings.lightmaps.Length) ? LightMode.LightMap : LightMode.LightProbe;
+                    for (int i = 0; i < mats.Length; i++)
                     {
-                        nodeObject.Add(co);
-                    }
-                    else
-                    {
-                        List<NodeObject> tempList = new List<NodeObject>();
-                        tempList.Add(co);
-                        classificationObjects.Add(co.Identifier,tempList);
+                        var mat = mats[i];
+                        long inde = long.Parse($"{mesh.GetHashCode()}{mat.GetHashCode()}");
+                        if (classificationObjects.TryGetValue(inde,out var nodeObject))
+                        {
+                            MinGameObject temMinGameObj = new MinGameObject(meshRenderer,i,tempLightMode == LightMode.LightMap);
+                            if (tempLightMode != nodeObject.m_lightMode)
+                            {
+                                EditorUtility.DisplayDialog("警告", $"有OBJ的光照模型与所属类不同，请检查后重新设置,OBJ使用的是{meshRenderer.gameObject.name}", "确定");
+                            }
+                            nodeObject.AddMinGameObj(temMinGameObj);
+                        }
+                        else
+                        {
+                            NodeObject temNodeobj = new NodeObject(i,mesh,mat,inde,meshRenderer as  Renderer);
+                            MinGameObject temMinGameObj = new MinGameObject(meshRenderer,i,tempLightMode == LightMode.LightMap);
+                            temNodeobj.AddMinGameObj(temMinGameObj);
+                            classificationObjects.Add(inde,temNodeobj);
+                        }
                     }
                 }
             }

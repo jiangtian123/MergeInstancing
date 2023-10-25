@@ -34,7 +34,8 @@ namespace Unity.MergeInstancingSystem
         private SerializedProperty m_LODDistanceProperty;
         private SerializedProperty m_CullDistanceProperty;
         private SerializedProperty m_MinObjectSizeProperty;
-        private SerializedProperty m_useMotionvectoruseMotionvector;
+        private SerializedProperty m_useMotionvector;
+        private SerializedProperty m_usePreciseCulling;
         private LODSlider m_LODSlider;
         
         private Type[] m_SpaceSplitterTypes;
@@ -72,7 +73,8 @@ namespace Unity.MergeInstancingSystem
             m_LODDistanceProperty = serializedObject.FindProperty("m_LODDistance");
             m_CullDistanceProperty = serializedObject.FindProperty("m_CullDistance");
             m_MinObjectSizeProperty = serializedObject.FindProperty("m_MinObjectSize");
-            m_useMotionvectoruseMotionvector = serializedObject.FindProperty("m_UseMotionvector");
+            m_useMotionvector = serializedObject.FindProperty("m_UseMotionvector");
+            m_usePreciseCulling = serializedObject.FindProperty("m_PreciseCulling");
             //创建一个滑条
             m_LODSlider = new LODSlider(true, "Cull");
             m_LODSlider.InsertRange("High", m_LODDistanceProperty);
@@ -116,9 +118,10 @@ namespace Unity.MergeInstancingSystem
             if (isShowCommon == true)
             {
                 EditorGUILayout.PropertyField(m_ChunkSizeProperty);
-                EditorGUILayout.PropertyField(m_useMotionvectoruseMotionvector);
+                EditorGUILayout.PropertyField(m_useMotionvector);
+                EditorGUILayout.PropertyField(m_usePreciseCulling);
                 m_ChunkSizeProperty.floatValue = GetChunkSizePropertyValue(m_ChunkSizeProperty.floatValue);
-                
+
                 if (m_splitter != null)
                 {
                     var bounds = instance.GetBounds();

@@ -5,6 +5,8 @@ namespace Unity.MergeInstancingSystem
     public class CameraRecognizer : MonoBehaviour
     {
         private Camera m_recognizedCamera;
+
+        public Plane[] planes;
         public Camera RecognizedCamera => m_recognizedCamera;
 
         [SerializeField]
@@ -35,17 +37,22 @@ namespace Unity.MergeInstancingSystem
         {
             
             m_recognizedCamera = GetComponent<Camera>();
+            planes = GeometryUtility.CalculateFrustumPlanes(m_recognizedCamera);
         }
         private void OnEnable()
         {
             CameraRecognizerManager.Instance.RegisterRecognizer(this);
         }
 
+        private void Update()
+        {
+            planes = GeometryUtility.CalculateFrustumPlanes(m_recognizedCamera);
+        }
+
         private void OnDisable()
         {
             CameraRecognizerManager.Instance.UnregisterRecognizer(this);            
         }
-        
         public void Active()
         {
             if (enabled == false)

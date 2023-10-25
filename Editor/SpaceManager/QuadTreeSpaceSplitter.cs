@@ -220,7 +220,7 @@ namespace Unity.MergeInstancingSystem.SpaceManager
         /// <summary>
         /// 遍历所有的对象，然后计算其包围盒（包含所有renderer的包围盒）在HLODS的根节点空间下
         /// </summary>
-        /// <param name="gameObjects"></param>
+        /// <param name="gameObjects">根节点</param>
         /// <param name="transform"></param>
         /// <returns></returns>
         private List<TargetInfo> CreateTargetInfoList(List<GameObject> gameObjects, Transform transform)

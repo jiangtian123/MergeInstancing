@@ -17,16 +17,14 @@ namespace Unity.MergeInstancingSystem
             public int length;
         }
         [SerializeField]
-        public int m_identifier;
+        public long m_identifier;
         [SerializeField]
         public int m_meshIndex;
         /// <summary>
         /// 一个节点内的data可能不是连续的
         /// </summary>
         [SerializeField] 
-        public List<ListInfo> m_matrix4x4Data;
-        [SerializeField]
-        public List<ListInfo> m_GIData;
+        public List<ListInfo> m_RenderData;
         [SerializeField]
         public int subMeshIndex;
         [SerializeField]

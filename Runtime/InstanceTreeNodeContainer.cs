@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 namespace Unity.MergeInstancingSystem
 {
@@ -24,7 +25,11 @@ namespace Unity.MergeInstancingSystem
         
         public InstanceTreeNode Get(int id)
         {
-            return m_treeNodes[id];
+            Profiler.BeginSample("Get Tree Node");
+            var treenode = m_treeNodes[id];
+            Profiler.EndSample();
+            return treenode;
+           
         }
         
         public void Remove(int id)

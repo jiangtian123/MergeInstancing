@@ -21,6 +21,6 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
        /// <param name="extractMaterial"></param>
        /// <param name="onProgress"></param>
         public void Build(SpaceNode rootNode,List<InstanceBuildInfo> 
-            info,AllInstanceData instanceData, GameObject root,float cullDistance, float lodDistance, bool writeNoPrefab,bool useMotionvector ,bool extractMaterial, Action<float> onProgress);
+            info,AllInstanceData instanceData, GameObject root,float cullDistance, float lodDistance, bool writeNoPrefab,bool useMotionvector,bool usePreciseCulling ,bool extractMaterial, Action<float> onProgress);
     }
 }

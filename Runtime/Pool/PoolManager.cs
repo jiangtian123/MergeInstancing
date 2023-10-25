@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 
 namespace Unity.MergeInstancingSystem.Pool
@@ -89,10 +90,6 @@ namespace Unity.MergeInstancingSystem.Pool
         {
             try
             {
-                if (!m_pools.ContainsKey(poolID))
-                {
-                    return;
-                }
                 var pool = m_pools[poolID];
                 pool.CopyToArray(source,head,length);
             }

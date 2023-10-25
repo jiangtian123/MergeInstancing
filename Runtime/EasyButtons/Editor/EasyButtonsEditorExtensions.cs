@@ -6,6 +6,7 @@ using UnityEngine;
 
 namespace EasyButtons
 {
+#if UNITY_EDITOR
     public static class EasyButtonsEditorExtensions
     {
         public static void DrawEasyButtons(this Editor editor)
@@ -23,7 +24,7 @@ namespace EasyButtons
                 {
                     // Determine whether the button should be enabled based on its mode
                     GUI.enabled = ba.Mode == ButtonMode.AlwaysEnabled
-                        || (EditorApplication.isPlaying ? ba.Mode == ButtonMode.EnabledInPlayMode : ba.Mode == ButtonMode.DisabledInPlayMode);
+                                  || (EditorApplication.isPlaying ? ba.Mode == ButtonMode.EnabledInPlayMode : ba.Mode == ButtonMode.DisabledInPlayMode);
 
 
                     if (((int)ba.Spacing & 1) != 0) GUILayout.Space(10);
@@ -45,4 +46,5 @@ namespace EasyButtons
             }
         }
     }
+#endif
 }

@@ -41,25 +41,18 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
         /// <param name="writeNoPrefab"></param>
         /// <param name="extractMaterial"></param>
         /// <param name="onProgress"></param>
-        public void Build(SpaceNode rootNode, List<InstanceBuildInfo>
-                infos, AllInstanceData instanceData, GameObject root, float cullDistance, float lodDistance,
-            bool useMotionvector,bool writeNoPrefab, bool extractMaterial,
-            Action<float> onProgress)
+        public void Build(SpaceNode rootNode,List<InstanceBuildInfo> 
+            info,AllInstanceData instanceData, GameObject root,float cullDistance, float lodDistance, bool writeNoPrefab,bool useMotionvector,bool usePreciseCulling ,bool extractMaterial, Action<float> onProgress)
         {
             dynamic options = m_streamingOptions;
             string path = options.OutputDirectory+$"{SceneManager.GetActiveScene().name}";
             //存按照某种遍历方式展成List的四叉树的容器
             InstanceTreeNodeContainer container = new InstanceTreeNodeContainer();
             InstanceTreeNode convertedRootNode = ConvertNode(container, rootNode);
-            BatchTreeNode(rootNode,infos,instanceData);
+            BatchTreeNode(rootNode,info,instanceData);
             if (onProgress != null)
                 onProgress(0.0f);
             InstanceData data = GetInstanceData(instanceData);
-            if (!CheckLightMode(instanceData,container,out var bojName))
-            {
-                EditorUtility.DisplayDialog("警告", $"有OBJ的光照模型与所属类不同，请检查后重新设置,OBJ使用的是{bojName}", "确定");
-                Environment.Exit(0);
-            }
             string filename = $"{path}/{root.name}.asset";
             //如果需要保存的路径不存在，就创建一个
             if (Directory.Exists(path) == false)
@@ -83,21 +76,17 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             defaultController.CullDistance = cullDistance;
             defaultController.LODDistance = lodDistance;
             defaultController.useMotionVector = useMotionvector;
+            defaultController.usePreciseCulling = usePreciseCulling;
         }
         private InstanceData GetInstanceData(AllInstanceData instanceData)
         {
             InstanceData tempData = new InstanceData();
-            tempData.m_materials = instanceData.m_materials;
-            tempData.m_meshs = instanceData.m_meshs;
-            tempData.m_matCitationNumber = instanceData.m_matCitationNumber.ToArray();
-            tempData.m_localToWorlds = instanceData.m_matrix4x4.ToArray();
-            tempData.m_matAndMeshIdentifiers = instanceData.m_matAndMeshIdentifiers;
-            tempData.m_identifierCounts = instanceData.m_identifierCounts;
-            tempData.m_lightMapIndex = instanceData.m_lightMapIndex.ToArray();
-            tempData.m_lightMapScaleOffset = instanceData.m_lightMapScaleOffset.ToArray();
-            //tempData.m_LightProbes = instanceData.m_LightProbes.ToArray();
-            tempData.m_identifierUseLightMapOrProbe = instanceData.m_identifierUseLightMapOrProbe;
-            tempData.BatchMaterial();
+            tempData.m_materials = instanceData.Materials;
+            tempData.m_meshs = instanceData.Meshes;
+            tempData.m_renderClass = instanceData.RenderClassStates;
+            tempData.m_Matrix4X4sData = instanceData.GetMatrix4X4s();
+            tempData.m_LightMapIndexsData = instanceData.GetLightMapIndexs();
+            tempData.m_LightMapOffsetsData = instanceData.GetLigthMapOffests();
             return tempData;
         }
         private void BatchTreeNode(SpaceNode node,List<InstanceBuildInfo> infos,AllInstanceData datas)
@@ -127,29 +116,10 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             foreach (var info in infos)
             {
                 var instanceTreeNode = convertedTable[info.Target];
-                var highNodeclassificationObject = info.classificationObjects;
-                var lowObject =  GetNodeData(highNodeclassificationObject,datas);
+                var LowNodeclassificationObject = info.classificationObjects;
+                var lowObject =  GetNodeData(LowNodeclassificationObject,datas);
                 instanceTreeNode.LowObjectIds = lowObject;
             }
-        }
-
-        private bool CheckDuplicates(string path,string assetName)
-        {
-            string[] existingAssetPaths = AssetDatabase.FindAssets("t:Object", new[] { path });
-            foreach (var existingAssetGuid in existingAssetPaths)
-            {
-                string existingAssetPath = AssetDatabase.GUIDToAssetPath(existingAssetGuid);
-                string existingAssetName = System.IO.Path.GetFileName(existingAssetPath);
-
-                if (existingAssetName == assetName)
-                {
-
-                    return true;
-
-                }
-            }
-
-            return false;
         }
         /// <summary>
         /// 从分类好的OBJ中构建NodeData，按照Mesh和材质分类
@@ -157,44 +127,26 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
         /// <param name="classificationObjects"></param>
         /// <param name="datas"></param>
         /// <returns></returns>
-        private List<NodeData> GetNodeData(Dictionary<string, List<NodeObject>> classificationObjects,AllInstanceData datas)
+        private List<NodeData> GetNodeData(Dictionary<long, NodeObject> classificationObjects,AllInstanceData datas)
         {
             List<NodeData> result = new List<NodeData>();
             foreach (var nodePair in classificationObjects)
             {
-                List<int> matrixx4x4Index = new List<int>();
-                List<int> giIndex = new List<int>();
+                List<int> minGameObjectsIndex = new List<int>();
                 //每种类型（材质加mesh）下的OBJList
                 var nodelist = nodePair.Value;
-                int meshIndex = datas.GetAssetsPositon(nodePair.Value[0].m_meshGUID,
-                    AllInstanceData.AssetsEnum.mesh);
-                int matIndex = datas.GetAssetsPositon(nodePair.Value[0].m_matGUID,
-                    AllInstanceData.AssetsEnum.material);
-                int subMesh = nodePair.Value[0].m_subMeshIndex;
-
-                bool needLighMap = nodePair.Value[0].m_NeedLightMap;
+                int meshIndex = datas.GetAssetIndex(nodePair.Value.m_mesh);
+                int matIndex = datas.GetAssetIndex(nodePair.Value.m_mat);
+                int subMesh = nodePair.Value.subMeshIndex;
+                bool needLighMap = nodePair.Value.m_lightMode == LightMode.LightMap;
                 //收集所有的矩阵信息
-                foreach (var nodeObject in nodelist)
+                foreach (var nodeObject in nodelist.m_gameobjs)
                 {
-                    int index = datas.GetAssetsPositon(nodeObject.m_renderer.GetHashCode().ToString(),AllInstanceData.AssetsEnum.matrix4x4);
-                    matrixx4x4Index.Add(index);
-                    if (needLighMap)
-                    {
-                        int GIindex = datas.GetAssetsPositon(nodeObject.m_renderer.GetHashCode().ToString(),AllInstanceData.AssetsEnum.LightMapIndex);
-                        if (GIindex == -1)
-                        {
-                            Debug.Log("has bug");
-                        }
-                        giIndex.Add(GIindex);
-                    }
-                    // else
-                    // {
-                    //     int GIindex = datas.GetAssetsPositon(nodeObject.m_renderer.GetHashCode().ToString(),AllInstanceData.AssetsEnum.SH);
-                    //     giIndex.Add(GIindex);
-                    // }
+                    int index = datas.GetAssetIndex(nodeObject);
+                    minGameObjectsIndex.Add(index);
                 }
-                matrixx4x4Index.Sort();
-                var matrixs = matrixx4x4Index.SplitArrayIntoConsecutiveSubArrays((a, b) =>
+                minGameObjectsIndex.Sort();
+                var matrixs = minGameObjectsIndex.SplitArrayIntoConsecutiveSubArrays((a, b) =>
                 {
                     if (a == b+1)
                     {
@@ -205,28 +157,15 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
                         return false;
                     }
                 });
-                var giList = giIndex.SplitArrayIntoConsecutiveSubArrays((a, b) =>
-                {
-                    if (a == b + 1)
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        return false;
-                    }
-                });
-
                 // ----------------------------------- 
                 NodeData tempNodteData = new NodeData();
-                tempNodteData.m_GIData = giList;
-                tempNodteData.m_matrix4x4Data = matrixs;
+                tempNodteData.m_RenderData = matrixs;
                 tempNodteData.m_material = matIndex;
                 tempNodteData.m_meshIndex = meshIndex;
                 tempNodteData.subMeshIndex = subMesh;
-                tempNodteData.m_castShadow = nodePair.Value[0].m_castShadow;
-                tempNodteData.m_queue = nodePair.Value[0].m_queue;
-                tempNodteData.m_identifier = datas.GetIdentifier(meshIndex, matIndex);
+                tempNodteData.m_castShadow = nodePair.Value.m_castShadow;
+                tempNodteData.m_queue = nodePair.Value.m_queue;
+                tempNodteData.m_identifier = nodePair.Value.Identifier;
                 tempNodteData.m_NeedLightMap = needLighMap;
                 result.Add(tempNodteData);
             }
@@ -290,47 +229,6 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             }
             
             return root;
-        }
-
-        private bool CheckLightMode(AllInstanceData instanceData,InstanceTreeNodeContainer instanceTreeNodeContainer,out string gameBojName)
-        {
-            for (int i = 0; i < instanceTreeNodeContainer.Count; i++)
-            {
-                var treeNode = instanceTreeNodeContainer.Get(i);
-                foreach (var nodeData in treeNode.HighObjectIds)
-                {
-                    var indefi = nodeData.m_identifier;
-                    if (nodeData.m_NeedLightMap == instanceData.GetIdentifierLightMode(indefi))
-                    {
-                        continue;
-                    }
-                    else
-                    {
-                        var mat = instanceData.GetMat(nodeData.m_material);
-                        var mesh = instanceData.GetMesh(nodeData.m_meshIndex);
-                        gameBojName = $"{mat.name}+{mesh.name}";
-                        return false;
-                    }
-                }
-                foreach (var nodeData in treeNode.LowObjectIds)
-                {
-                    var indefi = nodeData.m_identifier;
-                    if (nodeData.m_NeedLightMap == instanceData.GetIdentifierLightMode(indefi))
-                    {
-                        continue;
-                    }
-                    else
-                    {
-                        var mat = instanceData.GetMat(nodeData.m_material);
-                        var mesh = instanceData.GetMesh(nodeData.m_meshIndex);
-                        gameBojName = $"{mat.name}+{mesh.name}";
-                        return false;
-                    }
-                }
-            }
-
-            gameBojName = "";
-            return true;
         }
 
         public static void OnGUI(SerializableDynamicObject buildingOptions)

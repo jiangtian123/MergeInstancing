@@ -139,6 +139,7 @@ namespace Unity.MergeInstancingSystem
         public void Update(float lodDistance,bool enableOreciseCulling)
         {
             m_distance = m_spaceManager.GetDistanceSqure(m_bounds)- m_boundsLength ;
+            bool cullObj = false;
             // m_distance > 0 说明相机在当前节点的包围盒外面,<0就在里面不用判断剔除了
             if (m_distance > 0)
             {
@@ -156,19 +157,14 @@ namespace Unity.MergeInstancingSystem
             {
                 m_expectedState = State.High;
             }
-
-            bool cullObj = false;
-            if (enableOreciseCulling)
+            if (enableOreciseCulling && m_expectedState == State.High)
             {
                 cullObj = m_spaceManager.IsBOXInsideViewFrustum(m_bounds);
             }
             //如果父物体为release 或者 Low 自己肯定不会被显示
-            if (m_parent != null)
+            if (m_parent != null && (m_parent.ExprectedState == State.Release || m_parent.ExprectedState == State.Low))
             {
-                if (m_parent.ExprectedState == State.Release || m_parent.ExprectedState == State.Low)
-                {
-                    m_expectedState = State.Release;
-                }
+                m_expectedState = State.Release;
             }
             if (m_expectedState == State.High)
             {
@@ -176,6 +172,8 @@ namespace Unity.MergeInstancingSystem
                 {
                     m_controller.RecordInstance(HighObjectIds,m_distance,cullObj);
                 }
+                
+                
                 for (int i = 0; i < m_childTreeNodeIds.Count; ++i)
                 {
                     var childTreeNode = m_container.Get(m_childTreeNodeIds[i]);
