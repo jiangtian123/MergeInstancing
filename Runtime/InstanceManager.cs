@@ -234,10 +234,10 @@ namespace Unity.MergeInstancingSystem
             if (cam != CameraRecognizerManager.ActiveCamera)
                 return;
 #endif
-            CheckOutNeedUpdata(cam);
-            if (m_activeControllers == null || !CurrentIsNeedUpData)
-                return;
-            OnDispose(cam);
+            // CheckOutNeedUpdata(cam);
+            // if (m_activeControllers == null || !CurrentIsNeedUpData)
+            //     return;
+            OnReset(cam);
             for (int i = 0; i < m_activeControllers.Count; ++i)
             {
                 m_activeControllers[i].UpdateCull(cam);
@@ -246,139 +246,15 @@ namespace Unity.MergeInstancingSystem
         }
         
         //-------------------------- 渲染结束后，清理渲染数据 ---------------------------------------------
-        public void OnDispose(Camera cam)
+        public void OnReset(Camera cam)
         {
             for (int i = 0; i < m_activeControllers.Count; ++i)
             {
-                m_activeControllers[i].Dispose();
+                m_activeControllers[i].ResetRenderInfo();
             }
             m_OpaqueRenderlist.Clear();
             m_ShadowRenderlist.Clear();
             m_TransparentRenderlist.Clear();
         }
-#if  UNITY_EDITOR
-        public void Render(Bounds bounds, Color color, float width)
-        {
-            Vector3 min = bounds.min;
-            Vector3 max = bounds.max;
-            Vector3[] m_allocatedVertices = new Vector3[8];
-            
-            m_allocatedVertices[0] = new Vector3(min.x, min.y, min.z);
-            m_allocatedVertices[1] = new Vector3(min.x, min.y, max.z);
-            m_allocatedVertices[2] = new Vector3(max.x, min.y, max.z);
-            m_allocatedVertices[3] = new Vector3(max.x, min.y, min.z);
-
-            m_allocatedVertices[4] = new Vector3(min.x, max.y, min.z);
-            m_allocatedVertices[5] = new Vector3(min.x, max.y, max.z);
-            m_allocatedVertices[6] = new Vector3(max.x, max.y, max.z);
-            m_allocatedVertices[7] = new Vector3(max.x, max.y, min.z);
-            
-            Handles.color = color;
-
-            Handles.DrawLine(m_allocatedVertices[0], m_allocatedVertices[1], width);
-            Handles.DrawLine(m_allocatedVertices[1], m_allocatedVertices[2], width);
-            Handles.DrawLine(m_allocatedVertices[2], m_allocatedVertices[3], width);
-            Handles.DrawLine(m_allocatedVertices[3], m_allocatedVertices[0], width);
-
-            Handles.DrawLine(m_allocatedVertices[0], m_allocatedVertices[4], width);
-            Handles.DrawLine(m_allocatedVertices[1], m_allocatedVertices[5], width);
-            Handles.DrawLine(m_allocatedVertices[2], m_allocatedVertices[6], width);
-            Handles.DrawLine(m_allocatedVertices[3], m_allocatedVertices[7], width);
-
-            Handles.DrawLine(m_allocatedVertices[4], m_allocatedVertices[5], width);
-            Handles.DrawLine(m_allocatedVertices[5], m_allocatedVertices[6], width);
-            Handles.DrawLine(m_allocatedVertices[6], m_allocatedVertices[7], width);
-            Handles.DrawLine(m_allocatedVertices[7], m_allocatedVertices[4], width);
-        }
-        void DnBugCull(Camera camera)
-        {
-            RendererBounds(m_OpaqueRenderlist,camera);
-            RendererBounds(m_TransparentRenderlist,camera);
-        }
-
-        void RendererBounds(List<IRendererInstanceInfo> rendererInstanceInfo ,Camera camera )
-        {
-            foreach (var render in rendererInstanceInfo)
-            {
-                var matrix4x4pool = render.GetMatrix4x4();
-                var poolCountcount = render.GetPoolCount();
-                var mesh = render.GetMesh();
-                for (int i = 0; i < poolCountcount; i++)
-                {
-                    var count = matrix4x4pool[i].length;
-                    var matrixs = matrix4x4pool[i].OnePool;
-                    for (int j = 0; j < count; j++)
-                    {
-                        var matrix4X4 = matrixs[i];
-                        Bounds localBounds = new Bounds();
-                        if (mesh.bounds != null)
-                        {
-                            localBounds = mesh.bounds;
-                        }
-                        else
-                        {
-                            Debug.Log(mesh.name);
-                        }
-
-                        Bounds worldBounds = TransformBoundsToWorldBounds(matrix4X4, localBounds);
-                        var planes = GeometryUtility.CalculateFrustumPlanes(camera);
-                        Color _color = Color.gray;
-                        if (GeometryUtility.TestPlanesAABB(planes, worldBounds))
-                        {
-                            _color = Color.yellow;
-                        }
-                        else
-                        {
-                            _color = Color.red;
-                        }
-
-                        Render(worldBounds, _color, 2.0f);
-                    }
-                }
-            }
-        }
-        Bounds TransformBoundsToWorldBounds(UnityEngine.Matrix4x4 matrix, Bounds localBounds)
-        {
-            Bounds bounds = localBounds;
-            Vector3 min = bounds.min;
-            Vector3 max = bounds.max;
-            Vector3[] points = new[]
-            {
-                new Vector3(min.x, min.y, min.z),
-                new Vector3(max.x, min.y, min.z),
-                new Vector3(min.x, min.y, max.z),
-                new Vector3(max.x, min.y, max.z),
-                new Vector3(min.x, max.y, min.z),
-                new Vector3(max.x, max.y, min.z),
-                new Vector3(min.x, max.y, max.z),
-                new Vector3(max.x, max.y, max.z),
-            };
-
-            for (int i = 0; i < points.Length; ++i)
-            {
-                points[i] = matrix.MultiplyPoint(points[i]);
-            }
-
-            Vector3 newMin = points[0];
-            Vector3 newMax = points[0];
-
-            for (int i = 1; i < points.Length; ++i)
-            {
-                if (newMin.x > points[i].x) newMin.x = points[i].x;
-                if (newMax.x < points[i].x) newMax.x = points[i].x;
-                
-                if (newMin.y > points[i].y) newMin.y = points[i].y;
-                if (newMax.y < points[i].y) newMax.y = points[i].y;
-                
-                if (newMin.z > points[i].z) newMin.z = points[i].z;
-                if (newMax.z < points[i].z) newMax.z = points[i].z;
-            }
-
-
-            Bounds newBounds = new Bounds();
-            newBounds.SetMinMax(newMin, newMax);
-            return newBounds;
-        }
-#endif
     }
 }

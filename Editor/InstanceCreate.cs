@@ -330,14 +330,20 @@ namespace Unity.MergeInstancingSystem
                 {
                     meshRenderer.enabled = true;
                 }
-
+                instance.m_DisAbleComponent.Clear();
                 for (int i = 0; i < instance.m_DestoryOBJ.Count; i++)
                 {
                     var gameobject = instance.m_DestoryOBJ[i];
-                    var meshfilter = gameobject.AddComponent<MeshFilter>();
+                    var meshfilter = gameobject.GetComponent<MeshFilter>();
+                    if (meshfilter == null)
+                    {
+                        meshfilter = gameobject.AddComponent<MeshFilter>();
+                    }
                     var mesh = instance.m_DestoryMesh[i];
                     meshfilter.sharedMesh = mesh;
                 }
+                instance.m_DestoryOBJ.Clear();
+                instance.m_DestoryMesh.Clear();
             }
             finally
             {

@@ -13,13 +13,13 @@ namespace Unity.MergeInstancingSystem.SpaceManager
         /// <param name="bounds"></param>
         /// <returns></returns>
         bool IsCull(float cullDistance, Bounds bounds);
+
+        bool CompletelyCull(Bounds bounds,out bool isCompletely);
         /// <summary>
         /// 计算包围盒中心与相机的距离的平方，在xz平面
         /// </summary>
         /// <param name="bounds"></param>
         /// <returns></returns>
         float GetDistanceSqure(Bounds bounds);
-
-        public bool IsBOXInsideViewFrustum(Bounds box);
     }
 }

@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using Unity.MergeInstancingSystem.CreateUtils;
 using Unity.MergeInstancingSystem.SpaceManager;
 using UnityEditor;
 using UnityEngine;
@@ -132,48 +133,57 @@ namespace Unity.MergeInstancingSystem.Utils
              for (int i = 0; i < postTreeList.Count; i++)
              {
                  var tempGameObjects = postTreeList[i].Objects;
-                 
-                 //tempGameObjects 是该节点保存的所有OBJ
-                 for (int j = 0; j < tempGameObjects.Count; j++)
+
+
+                 //这里的gameobject都是一个根节点，其下包含LOD——Mesh0-n——SubMesh
+                 var meshRenderers = GetMeshRendererWithLOD(tempGameObjects);
+                 foreach (var meshRenderer in meshRenderers)
                  {
-                     //这里的gameobject都是一个根节点，其下包含LOD——Mesh0-n——SubMesh
-                     //跳过LOD级别直接拿一个GameObject下面的所有Meshrenderr，包含了不同Lod级别和同一个级别不同的Mesh
-                     var meshRenderers = tempGameObjects[j].GetComponentsInChildren<MeshRenderer>();
-                     foreach (var meshRenderer in meshRenderers)
+                     var mats = meshRenderer.sharedMaterials;
+                     var mesh = meshRenderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
+                     var light_mapindex = meshRenderer.lightmapIndex;
+                     LightMode tempLightMode =
+                         (light_mapindex >= 0 && light_mapindex < LightmapSettings.lightmaps.Length)
+                             ? LightMode.LightMap
+                             : LightMode.LightProbe;
+                     //按照subMesh区分
+                     for (int k = 0; k < mats.Length; k++)
                      {
-                         var mats = meshRenderer.sharedMaterials;
-                         var mesh = meshRenderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
-                         var light_mapindex = meshRenderer.lightmapIndex;
-                         LightMode tempLightMode =  (light_mapindex >=0 && light_mapindex < LightmapSettings.lightmaps.Length) ? LightMode.LightMap : LightMode.LightProbe;
-                         //按照subMesh区分
-                         for (int k = 0; k < mats.Length; k++)
+                         var mat = mats[k];
+                         int meshHash = mesh.GetHashCode();
+                         int matHash = mat.GetHashCode();
+                         long inde = long.Parse($"{meshHash}{matHash}");
+                         if (classificationObjects.TryGetValue(inde, out var nodeObject))
                          {
-                             var mat = mats[k];
-                             int meshHash = mesh.GetHashCode();
-                             int matHash = mat.GetHashCode();
-                             long inde = long.Parse($"{meshHash}{matHash}");
-                             if (classificationObjects.TryGetValue(inde,out var nodeObject))
+                             MinGameObject temMinGameObj =
+                                 new MinGameObject(meshRenderer, k, tempLightMode == LightMode.LightMap);
+                             if (tempLightMode != nodeObject.m_lightMode)
                              {
-                                 MinGameObject temMinGameObj = new MinGameObject(meshRenderer,k,tempLightMode == LightMode.LightMap);
-                                 if (tempLightMode != nodeObject.m_lightMode)
-                                 {
-                                     EditorUtility.DisplayDialog("警告", $"有OBJ的光照模型与所属类不同，请检查后重新设置,OBJ使用的是{meshRenderer.gameObject.name}", "确定");
-                                 }
-                                 nodeObject.AddMinGameObj(temMinGameObj);
+                                 EditorUtility.DisplayDialog("警告",
+                                     $"有OBJ的光照模型与所属类不同，请检查后重新设置,OBJ使用的是{meshRenderer.gameObject.name}", "确定");
                              }
-                             else
-                             {
-                                 NodeObject temNodeobj = new NodeObject(k,mesh,mat,inde,meshRenderer as  Renderer);
-                                 MinGameObject temMinGameObj = new MinGameObject(meshRenderer,k,tempLightMode == LightMode.LightMap);
-                                 temNodeobj.AddMinGameObj(temMinGameObj);
-                                 classificationObjects.Add(inde,temNodeobj);
-                             }
+
+                             nodeObject.AddMinGameObj(temMinGameObj);
+                         }
+                         else
+                         {
+                             NodeObject temNodeobj = new NodeObject(k, mesh, mat, inde, meshRenderer as Renderer);
+                             MinGameObject temMinGameObj =
+                                 new MinGameObject(meshRenderer, k, tempLightMode == LightMode.LightMap);
+                             temNodeobj.AddMinGameObj(temMinGameObj);
+                             classificationObjects.Add(inde, temNodeobj);
                          }
                      }
                  }
+
                  //将按照标识符（mesh——mat）分类的Node再按照是否使用lightmap分类，保证GIData和Matrix的位置一致.
                  foreach (var VARIABLE in classificationObjects)
                  {
+                     if (VARIABLE.Key == 624068623448)
+                     {
+                         Debug.Log("");
+                     }
+
                      if (VARIABLE.Value.m_lightMode == LightMode.LightMap)
                      {
                          useLightMapNode.Add(VARIABLE.Value);
@@ -238,6 +248,46 @@ namespace Unity.MergeInstancingSystem.Utils
              ret.center = bounds.center;
              ret.size = bounds.size;
              return ret;
+         }
+
+         public static List<MeshRenderer> GetMeshRendererWithLOD(List<GameObject> objects)
+         {
+             List<MeshRenderer> result = new List<MeshRenderer>();
+             List<List<MeshRenderer>> tempMeshrenderer = new List<List<MeshRenderer>>();
+             int maxLod = 1;
+             //获取最大的Lod级别
+             for (int i = 0; i < objects.Count; i++)
+             {
+                 var lodGroup = objects[i].GetComponent<LODGroup>();
+                 if (lodGroup == null)
+                 {
+                     continue;
+                 }
+                 var lodCount = lodGroup.GetLODs().Length;
+                 if (lodCount > maxLod)
+                 {
+                     maxLod = lodCount;
+                 }
+             }
+             Debug.Log($"最大级别的Lod为{maxLod}");
+             for (int i = 0; i < maxLod; i++)
+             {
+                 List<MeshRenderer> a = new List<MeshRenderer>();
+                 tempMeshrenderer.Add(a);
+             }
+             for (int i = 0; i < objects.Count; i++)
+             {
+                 for (int j = 0; j < maxLod; j++)
+                 {
+                     tempMeshrenderer[j].AddRange(GetMeshRenderer.GetMeshRenderers(objects[i],0.01f,j,true));
+                 }
+             }
+
+             for (int i = 0; i < maxLod; i++)
+             {
+                 result.AddRange(tempMeshrenderer[i]);
+             }
+             return result;
          }
     }
 }

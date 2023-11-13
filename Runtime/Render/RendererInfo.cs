@@ -56,16 +56,16 @@ namespace Unity.MergeInstancingSystem.Render
         }
         public List<Pool<Matrix4x4>> GetMatrix4x4()
         {
-            return PoolManager.Instance.GetMatrix4X4s(m_poolID.m_matrix4x4ID);
+            return PoolManager.Instance.GetMatrix4X4(m_poolID.m_matrix4x4ID);
         }
         public List<Pool<float>> GetlightMapIndex()
         {
-            return PoolManager.Instance.GetFloats(m_poolID.m_lightMapIndexId);
+            return PoolManager.Instance.GetFloat(m_poolID.m_lightMapIndexId);
         }
 
         public List<Pool<Vector4>> GetlightMapScaleOffset()
         {
-            return PoolManager.Instance.GetVector4s(m_poolID.m_lightMapScaleOffsetID);
+            return PoolManager.Instance.GetVector4(m_poolID.m_lightMapScaleOffsetID);
         }
         public  MaterialPropertyBlock GetMatpropretyBlock()
         {
@@ -80,13 +80,14 @@ namespace Unity.MergeInstancingSystem.Render
         /// <summary>
         /// 每帧重置一次Pool
         /// </summary>
-        public void Dispose()
+        public void ResetPool()
         {
-            PoolManager.Instance.DisposePool(m_poolID.m_matrix4x4ID);
+            m_renderCount = 0;
+            PoolManager.Instance.ResetPool(m_poolID.m_matrix4x4ID);
             if (useLightMapOrLightProbe)
             {
-                PoolManager.Instance.DisposePool(m_poolID.m_lightMapIndexId);
-                PoolManager.Instance.DisposePool(m_poolID.m_lightMapScaleOffsetID);
+                PoolManager.Instance.ResetPool(m_poolID.m_lightMapIndexId);
+                PoolManager.Instance.ResetPool(m_poolID.m_lightMapScaleOffsetID);
             }
         }
     }

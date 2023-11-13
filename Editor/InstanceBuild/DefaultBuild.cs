@@ -48,7 +48,7 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             string path = options.OutputDirectory+$"{SceneManager.GetActiveScene().name}";
             //存按照某种遍历方式展成List的四叉树的容器
             InstanceTreeNodeContainer container = new InstanceTreeNodeContainer();
-            InstanceTreeNode convertedRootNode = ConvertNode(container, rootNode);
+            InstanceTreeNode convertedRootNode = Helper(container,rootNode,0);
             BatchTreeNode(rootNode,info,instanceData);
             if (onProgress != null)
                 onProgress(0.0f);
@@ -84,7 +84,7 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             tempData.m_materials = instanceData.Materials;
             tempData.m_meshs = instanceData.Meshes;
             tempData.m_renderClass = instanceData.RenderClassStates;
-            tempData.m_Matrix4X4sData = instanceData.GetMatrix4X4s();
+            tempData.transforms = instanceData.GetMatrix4X4s();
             tempData.m_LightMapIndexsData = instanceData.GetLightMapIndexs();
             tempData.m_LightMapOffsetsData = instanceData.GetLigthMapOffests();
             return tempData;
@@ -110,7 +110,7 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
                 //处理每个节点
                 var highNodeclassificationObject = spaceNode.classificationObjects;
                 var highObj =  GetNodeData(highNodeclassificationObject,datas);
-                instanceTreeNode.HighObjectIds = highObj;
+                instanceTreeNode.HighObjects = highObj;
             }
 
             foreach (var info in infos)
@@ -118,7 +118,8 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
                 var instanceTreeNode = convertedTable[info.Target];
                 var LowNodeclassificationObject = info.classificationObjects;
                 var lowObject =  GetNodeData(LowNodeclassificationObject,datas);
-                instanceTreeNode.LowObjectIds = lowObject;
+                instanceTreeNode.LowObjects = lowObject;
+                instanceTreeNode.LowCullBounds = info.CalculateRealBound();
             }
         }
         /// <summary>
@@ -136,6 +137,10 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
                 //每种类型（材质加mesh）下的OBJList
                 var nodelist = nodePair.Value;
                 int meshIndex = datas.GetAssetIndex(nodePair.Value.m_mesh);
+                if (meshIndex == -1)
+                {
+                    Debug.Log("index = -1");
+                }
                 int matIndex = datas.GetAssetIndex(nodePair.Value.m_mat);
                 int subMesh = nodePair.Value.subMeshIndex;
                 bool needLighMap = nodePair.Value.m_lightMode == LightMode.LightMap;
@@ -174,6 +179,16 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             return result;
         }
         Dictionary<SpaceNode, InstanceTreeNode> convertedTable = new Dictionary<SpaceNode, InstanceTreeNode>();
+        
+        public int CountSubtrees(SpaceNode root)
+        {
+            int count = 1; // 包括当前节点本身的数量
+            for (int i = 0; i < root.GetChildCount(); i++)
+            {
+                count += CountSubtrees(root.GetChild(i));
+            }
+            return count;
+        }
         /// <summary>
         /// 这个地方按照 子节点父节点的方式展开树。
         /// </summary>
@@ -192,22 +207,16 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             instanceTreeNodes.Enqueue(root);
             spaceNodes.Enqueue(rootNode);
             levels.Enqueue(0);
-            int COunt = 0;
             while (instanceTreeNodes.Count > 0)
             {
-                COunt++;
                 var instanceTreeNode = instanceTreeNodes.Dequeue();
                 var spaceNode = spaceNodes.Dequeue();
                 int level = levels.Dequeue();
-    
+
                 convertedTable[spaceNode] = instanceTreeNode;
-                if (COunt == 57)
-                {
-                    Debug.Log("");
-                }
                 instanceTreeNode.Level = level;
                 instanceTreeNode.Bounds = spaceNode.Bounds;
-                instanceTreeNode.CullBounds = spaceNode.CalculateRealBound();
+                instanceTreeNode.HighCullBounds = spaceNode.CalculateRealBound();
                 if (spaceNode.HasChild())
                 {
                     //存放一个和一个节点子孩子数量相同的TreeNode
@@ -222,15 +231,28 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
                         spaceNodes.Enqueue(spaceNode.GetChild(i));
                         levels.Enqueue(level + 1);
                     }
-
                     instanceTreeNode.SetChildTreeNode(childTreeNodes);
-
                 }
             }
             
             return root;
         }
 
+        private InstanceTreeNode Helper(InstanceTreeNodeContainer container, SpaceNode rootNode,int level)
+        {
+            InstanceTreeNode root = new InstanceTreeNode();
+            convertedTable[rootNode] = root;
+            root.Level = level;
+            root.Bounds = rootNode.Bounds;
+            root.SetContainer(container);
+            root.HighCullBounds = rootNode.CalculateRealBound();
+            root.ChildNumber = CountSubtrees(rootNode)- 1;
+            for (int i = 0; i < rootNode.GetChildCount(); i++)
+            {
+                root.SetChildTreeNode(Helper(container,rootNode.GetChild(i),level+1));
+            }
+            return root;
+        }
         public static void OnGUI(SerializableDynamicObject buildingOptions)
         {
             dynamic options = buildingOptions;

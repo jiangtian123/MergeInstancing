@@ -90,8 +90,10 @@ namespace Unity.MergeInstancingSystem.Pool
         {
             try
             {
+                Profiler.BeginSample("Copr data");
                 var pool = m_pools[poolID];
                 pool.CopyToArray(source,head,length);
+                Profiler.EndSample();
             }
             catch (Exception e)
             {
@@ -112,27 +114,24 @@ namespace Unity.MergeInstancingSystem.Pool
             }
             return m_pools[poolId].Count;
         }
-        public List<Pool<Matrix4x4>> GetMatrix4X4s(int poolId)
+        public List<Pool<Matrix4x4>> GetMatrix4X4(int poolId)
         {
             return (List<Pool<Matrix4x4>>)GetData(poolId);
         }
-        public List<Pool<float>> GetFloats(int poolId)
+        public List<Pool<float>> GetFloat(int poolId)
         {
             return (List<Pool<float>>)GetData(poolId);
         }
-        public List<Pool<String>> GetString(int poolId)
-        {
-            return (List<Pool<String>>)GetData(poolId);
-        }
-        public List<Pool<Vector2>> GetVector2s(int poolId)
+
+        public List<Pool<Vector2>> GetVector2(int poolId)
         {
             return (List<Pool<Vector2>>)GetData(poolId);
         }
-        public List<Pool<Vector3>> GetVector3s(int poolId)
+        public List<Pool<Vector3>> GetVector3(int poolId)
         {
             return (List<Pool<Vector3>>)GetData(poolId);
         }
-        public List<Pool<Vector4>> GetVector4s(int poolId)
+        public List<Pool<Vector4>> GetVector4(int poolId)
         {
             return (List<Pool<Vector4>>)GetData(poolId);
         }
@@ -150,7 +149,7 @@ namespace Unity.MergeInstancingSystem.Pool
         }
         #endregion
         
-        public void DisposePool(int id)
+        public void ResetPool(int id)
         {
             try
             {

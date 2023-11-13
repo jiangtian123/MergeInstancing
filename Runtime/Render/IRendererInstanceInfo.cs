@@ -1,8 +1,8 @@
 ﻿using System;
 using UnityEngine;
 using System.Collections.Generic;
+using Unity.Collections;
 using Unity.MergeInstancingSystem.Pool;
-using UnityEngine.Rendering;
 
 namespace Unity.MergeInstancingSystem.Render
 {
@@ -25,11 +25,6 @@ namespace Unity.MergeInstancingSystem.Render
         {
             get;
         }
-
-        float Dis
-        {
-            get;
-        }
-        void Dispose();
+        void ResetPool();
     }
 }

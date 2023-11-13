@@ -1,6 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
+using Unity.Jobs;
+using Unity.Mathematics;
+using Unity.MergeInstancingSystem.CustomData;
+using Unity.MergeInstancingSystem.Job;
 using Unity.MergeInstancingSystem.Pool;
 using Unity.MergeInstancingSystem.Render;
 using Unity.MergeInstancingSystem.SpaceManager;
@@ -8,7 +14,7 @@ using Unity.MergeInstancingSystem.Utils;
 using UnityEngine;
 using UnityEditor;
 using UnityEngine.Profiling;
-using Matrix4x4 = System.Numerics.Matrix4x4;
+using UnityEngine.UI;
 
 namespace Unity.MergeInstancingSystem.Controller
 {
@@ -27,11 +33,17 @@ namespace Unity.MergeInstancingSystem.Controller
             m_spaceManager = new QuadTreeSpaceManager();
             m_positionPoolMap = new Dictionary<long, PoolID>();
             m_renderInfo = new Dictionary<long, RendererInfo>();
+            m_shadowInfo = new Dictionary<long, RendererInfo>();
+            m_shadowPositionPoolMap = new Dictionary<long, PoolID>();
         }
         
         public void Start()
         {
-            m_root.Initialize(this, m_spaceManager, null);
+            UpdateSampler = UnityEngine.Profiling.CustomSampler.Create("Begin Update Tree");
+            ResetState = UnityEngine.Profiling.CustomSampler.Create("Reset State");
+            Shadow = UnityEngine.Profiling.CustomSampler.Create("Shadow");
+            UpdateTreeNode = UnityEngine.Profiling.CustomSampler.Create("Update Tree Node");
+            Renderering = UnityEngine.Profiling.CustomSampler.Create("Renderering");
         }
         /*
          * 分配内存的地方
@@ -48,24 +60,25 @@ namespace Unity.MergeInstancingSystem.Controller
             }
             return ID;
         }
+        
+        
         public void OnEnable()
         {
             InstanceManager.Instance.Register(this);
+            m_instanceData.Init();
+            InitDotsData();
+            m_root.Initialize(this, m_spaceManager, null);
+            InitShadowDotsData();
             //
             // ------------------- 申请内存 ----------------------------------------
             try
             {
-                // m_matAndMeshIdentifiers : 每种Mesh-Mat搭配的唯一标识符
-                var renderClassStates = m_instanceData.m_renderClass;
-                for (int i = 0; i < renderClassStates.Count; i++)
+                AllocatorPool();
+                if (castShadow)
                 {
-                    //Count 是该批次有多少个OBJ
-                    var count = renderClassStates[i].m_citations;
-                    var identifier = renderClassStates[i].m_identifier;
-                    bool useLightMapOrProbe = renderClassStates[i].m_useLightMap;
-                    var id =  InitPoolWithInstanceData(count,useLightMapOrProbe);
-                    m_positionPoolMap.Add(identifier,id);
+                    AllocatorShadowPool();
                 }
+                
             }
             catch (Exception e)
             {
@@ -73,9 +86,36 @@ namespace Unity.MergeInstancingSystem.Controller
             }
            
         }
+
+        private void AllocatorPool()
+        {
+            // m_matAndMeshIdentifiers : 每种Mesh-Mat搭配的唯一标识符
+            var renderClassStates = m_instanceData.m_renderClass;
+            for (int i = 0; i < renderClassStates.Count; i++)
+            {
+                //Count 是该批次有多少个OBJ
+                var count = renderClassStates[i].m_citations;
+                var identifier = renderClassStates[i].m_identifier;
+                bool useLightMapOrProbe = renderClassStates[i].m_useLightMap;
+                var id =  InitPoolWithInstanceData(count,useLightMapOrProbe);
+                m_positionPoolMap.Add(identifier,id);
+            }
+        }
+        private void AllocatorShadowPool()
+        {
+            foreach (var nodeData in m_root.LowObjects)
+            {
+                int count = nodeData.objCount;
+                var identifier = nodeData.m_identifier;
+                var id =  InitPoolWithInstanceData(count,false);
+                m_shadowPositionPoolMap.Add(identifier,id);
+            }
+        }
         public void OnDisable()
         {
             m_renderInfo.Clear();
+            m_root.Dispose();
+            DisposeNativeArray();
             foreach (var poolID in m_positionPoolMap)
             {
                 var id = poolID.Value;
@@ -104,9 +144,15 @@ namespace Unity.MergeInstancingSystem.Controller
         /// 每种渲染类型对应的渲染数据,渲染类型指的是Mesh+Mat的唯一组合,需要每帧清理
         /// </summary>
         private Dictionary<long, RendererInfo> m_renderInfo;
-
-        private ISpaceManager m_spaceManager;
         
+        private Dictionary<long, PoolID> m_shadowPositionPoolMap;
+        private Dictionary<long, RendererInfo> m_shadowInfo;
+        private ISpaceManager m_spaceManager;
+
+        public NativeArray<SmallTreeNode> smallTreeNodes;
+        public NativeArray<byte> nodesState;
+        public NativeList<JobHandle> JobHandles;
+        public NativeList<JobHandle> shadowJobHandles;
         [SerializeField]
         private int m_controllerID;
         
@@ -127,6 +173,11 @@ namespace Unity.MergeInstancingSystem.Controller
         [SerializeField]
         private InstanceTreeNode m_root;
         
+        [SerializeField]
+        private float maxShadowDis;
+
+        [SerializeField] private bool castShadow;
+        
         /// <summary>
         /// 剔除的距离
         /// </summary>
@@ -144,6 +195,13 @@ namespace Unity.MergeInstancingSystem.Controller
 
         [SerializeField] private InstanceData m_instanceData;
         
+        
+        UnityEngine.Profiling.CustomSampler UpdateSampler;
+        UnityEngine.Profiling.CustomSampler ResetState;
+        UnityEngine.Profiling.CustomSampler Shadow;
+        UnityEngine.Profiling.CustomSampler UpdateTreeNode;
+        UnityEngine.Profiling.CustomSampler Renderering;
+
         public int ControllerID
         {
             set { m_controllerID = value;}
@@ -170,6 +228,17 @@ namespace Unity.MergeInstancingSystem.Controller
             get { return m_root; }
         }
 
+        public float MaxShadowDis
+        {
+            get
+            {
+                return maxShadowDis;
+            }
+            set
+            {
+                maxShadowDis = value;
+            }
+        }
         public InstanceData InstanceData
         {
             set
@@ -200,19 +269,19 @@ namespace Unity.MergeInstancingSystem.Controller
         /// </summary>
         /// <param name="rendererObj"></param>
         /// <param name="dis">当前节点距离相机的位置</param>
-        public void RecordInstance(List<NodeData> rendererObj,float dis,bool cullOBJ)
+        public void RecordInstance(List<NodeData> rendererObj)
         {
             try
             {
-                foreach (var nodeData in rendererObj)
+                for (int i = 0; i < rendererObj.Count; i++)
                 {
+                    var nodeData = rendererObj[i];
                     var mesh = m_instanceData.m_meshs[nodeData.m_meshIndex];
                     var mat = m_instanceData.m_materials[nodeData.m_material];
                     long identifier = nodeData.m_identifier;
                     if (m_renderInfo.TryGetValue(identifier,out var rendererInfo))
                     {
-                        rendererInfo.m_CameraDis = dis;
-                        AddDataToPool(nodeData,rendererInfo,cullOBJ);
+                        AddDataToPool(nodeData,rendererInfo);
                     }
                     else
                     {
@@ -225,8 +294,7 @@ namespace Unity.MergeInstancingSystem.Controller
                         tempInfo.m_SubMeshIndex = nodeData.subMeshIndex;
                         tempInfo.useLightMapOrLightProbe = nodeData.m_NeedLightMap;
                         tempInfo.m_instanceBlock = nodeData.m_propretyBlock;
-                        tempInfo.m_CameraDis = dis;
-                        AddDataToPool(nodeData, tempInfo,cullOBJ);
+                        AddDataToPool(nodeData, tempInfo);
                         m_renderInfo.Add(identifier,tempInfo);
                     }
                 }
@@ -237,7 +305,75 @@ namespace Unity.MergeInstancingSystem.Controller
             }
            
         }
-        
+
+        public void RecordInstanceWihtShadow(List<NodeData> rendererObj)
+        {
+            for (int i = 0; i < rendererObj.Count; i++)
+            {
+                var nodeData = rendererObj[i];
+                var mesh = m_instanceData.m_meshs[nodeData.m_meshIndex];
+                var mat = m_instanceData.m_materials[nodeData.m_material];
+                long identifier = nodeData.m_identifier;
+                if (m_shadowInfo.TryGetValue(identifier,out var rendererInfo))
+                {
+                    AddShadowDataToPool(nodeData,rendererInfo);
+                }
+                else
+                {
+                    RendererInfo tempInfo = new RendererInfo();
+                    tempInfo.m_mat = mat;
+                    tempInfo.m_mesh = mesh;
+                    tempInfo.m_poolID = m_shadowPositionPoolMap[identifier];
+                    tempInfo.CastShadow = nodeData.m_castShadow;
+                    tempInfo.m_queue = nodeData.m_queue;
+                    tempInfo.m_SubMeshIndex = nodeData.subMeshIndex;
+                    tempInfo.useLightMapOrLightProbe = nodeData.m_NeedLightMap;
+                    tempInfo.m_instanceBlock = nodeData.m_propretyBlock;
+                    AddShadowDataToPool(nodeData, tempInfo);
+                    m_shadowInfo.Add(identifier,tempInfo);
+                }
+            }
+        }
+
+        private void AddShadowDataToPool(NodeData nodeData,RendererInfo rendererInfo)
+        {
+            var poolId = rendererInfo.m_poolID;
+            var Matrix4x4Source = m_instanceData.m_matrix_Worlds;
+            var renderDataList = nodeData.ShadowData;
+            for (int j = 0; j < renderDataList.Length; j++)
+            {
+                var listInfo = renderDataList[j];
+                int head = listInfo.head;
+                int length = listInfo.length;
+                rendererInfo.m_renderCount += length;
+                PoolManager.Instance.CopyData(poolId.m_matrix4x4ID, Matrix4x4Source, head, length);
+            }
+        }
+        private void InitShadowDotsData()
+        {
+            shadowJobHandles = new NativeList<JobHandle>(Allocator.Persistent);
+        }
+        private void InitDotsData()
+        {
+            nodesState = new NativeArray<byte>(m_treeNodeContainer.m_treeNodes.Count + 1, Allocator.Persistent);
+            smallTreeNodes = new NativeArray<SmallTreeNode>(m_treeNodeContainer.m_treeNodes.Count, Allocator.Persistent);
+            JobHandles = new NativeList<JobHandle>(128, Allocator.Persistent);
+            for (int i = 0; i < m_treeNodeContainer.m_treeNodes.Count; i++)
+            {
+                var node = m_treeNodeContainer.Get(i);
+                smallTreeNodes[i] = new SmallTreeNode(node.HighCullBounds,node.LowCullBounds,node.m_childTreeNodeIds);
+            }
+        }
+
+        private void DisposeNativeArray()
+        {
+            nodesState.Dispose();
+            smallTreeNodes.Dispose();
+            JobHandles.Dispose();
+            // m_shadowTreeNode.Dispose();
+            // m_shadowNodeState.Dispose();
+            shadowJobHandles.Dispose();
+        }
         
         /// <summary>
         /// 向事先申请好的内存中添加要渲染的数据
@@ -245,88 +381,83 @@ namespace Unity.MergeInstancingSystem.Controller
         /// <param name="nodeData">节点保存的数据信息</param>
         /// <param name="rendererInfo"></param>
         /// <param name="cullOBJ">是否挨个剔除节点中的OBJ</param>
-        private void AddDataToPool(NodeData nodeData,RendererInfo rendererInfo,bool cullOBJ)
+        private void AddDataToPool(NodeData nodeData,RendererInfo rendererInfo)
         {
-            Profiler.BeginSample("Begin AddDataToPool");
             var poolId = rendererInfo.m_poolID;
-            var Matrix4x4Source = m_instanceData.m_Matrix4X4sData;
             var lightMapIndexSource = m_instanceData.m_LightMapIndexsData;
             var lightMapScaleOffsetSource = m_instanceData.m_LightMapOffsetsData;
-            //var LightProbesSource = m_instanceData.m_LightProbes;
-            var renderDataList = nodeData.m_RenderData;
+            var Matrix4x4Source = m_instanceData.m_matrix_Worlds;
+            var renderDataList = nodeData.RenderData;
+            nodeData.ResetState();
             //这里之前有GC
-            var planes = CameraRecognizerManager.ActiveRecognizer.planes;
-            foreach (var listInfo in renderDataList)
+            for (int j = 0; j < renderDataList.Length; j++)
             {
-                if (cullOBJ)
+                var listInfo = renderDataList[j];
+                int head = listInfo.head;
+                int length = listInfo.length;
+                rendererInfo.m_renderCount += length;
+                PoolManager.Instance.CopyData(poolId.m_matrix4x4ID, Matrix4x4Source, head, length);
+                if (nodeData.m_NeedLightMap && head >= 0)
                 {
-                    var localBounds = rendererInfo.m_mesh.bounds;
-                    for (int i = 0; i < listInfo.length; i++)
-                    {
-                        int index = listInfo.head + i;
-                        var localToWorld = m_instanceData.m_Matrix4X4sData[index];
-                        var worldBounds = TransformBoundsToWorldBounds(localToWorld, localBounds);
-                        if (GeometryUtility.TestPlanesAABB(planes, worldBounds))
-                        {
-                            rendererInfo.m_renderCount += 1;
-                            PoolManager.Instance.CopyData(poolId.m_matrix4x4ID,m_instanceData.m_Matrix4X4sData,listInfo.head + i,1);
-                            if (nodeData.m_NeedLightMap)
-                            {
-                                PoolManager.Instance.CopyData(poolId.m_lightMapIndexId,m_instanceData.m_LightMapIndexsData,listInfo.head + i,1);
-                                PoolManager.Instance.CopyData(poolId.m_lightMapScaleOffsetID,m_instanceData.m_LightMapOffsetsData,listInfo.head + i,1);
-                            }
-                        }
-                    }
-                }
-                else
-                {
-                    int head = listInfo.head;
-                    int length = listInfo.length;
-                    rendererInfo.m_renderCount += length;
-                    PoolManager.Instance.CopyData(poolId.m_matrix4x4ID,Matrix4x4Source,head,length);
-                    if (nodeData.m_NeedLightMap && head >=0)
-                    {
-                        PoolManager.Instance.CopyData(poolId.m_lightMapIndexId,lightMapIndexSource,head,length);
-                        PoolManager.Instance.CopyData(poolId.m_lightMapScaleOffsetID,lightMapScaleOffsetSource,head,length);
-                   
-                    }
+                    PoolManager.Instance.CopyData(poolId.m_lightMapIndexId, lightMapIndexSource, head, length);
+                    PoolManager.Instance.CopyData(poolId.m_lightMapScaleOffsetID, lightMapScaleOffsetSource, head,
+                        length);
                 }
             }
-            Profiler.EndSample();
         }
         //----------- 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="matrix"></param>
-        /// <param name="localBounds"></param>
-        /// <returns></returns>
-        Bounds TransformBoundsToWorldBounds(UnityEngine.Matrix4x4 matrix, Bounds localBounds)
-        {
-            var position = matrix.GetPosition();
-            Vector3 worldAABBMin = localBounds.min + position;
-            Vector3 worldAABBMax = localBounds.max + position;
-            Vector3 center = (worldAABBMin + worldAABBMax) * 0.5f;
-            Vector3 size = worldAABBMax - worldAABBMin;
-            Bounds worldBounds = new Bounds(center,size);
-            return worldBounds;
-        }
         /// <summary>
         /// 更新四叉树
         /// </summary>
         /// <param name="camera"></param>
         public void UpdateCull(Camera camera)
         {
-            Profiler.BeginSample("Begin Updata Tree");
+            UpdateSampler.Begin();
             if (m_spaceManager == null)
                 return;
             m_spaceManager.UpdateCamera(this.transform, camera);
-            m_root.Update(m_lodDistance,usePreciseCulling);
+            //m_root.Update(m_lodDistance);
+            // UpdateTree();
             //将一课树需要渲染的注册一下
+            ResetState.Begin();
+            JobHandles.Clear();
+            ResetStateArray();
+            ResetState.End();
+            Shadow.Begin();
+            if (castShadow)
+            {
+                ResiterShadow();
+            }
+            Shadow.End();
+            UpdateTreeNode.Begin();
+            m_root.UpdateWithJob(JobHandles,true,1,0);
+            JobHandle.CompleteAll(JobHandles);
+            UpdateTreeNode.End();
+            Renderering.Begin();
+            m_root.RegsiterRender(0,nodesState,usePreciseCulling);
             RegsiterRender();
-            Profiler.EndSample();
+            Renderering.End();
+            UpdateSampler.End();
+        }
+
+        private void ResetStateArray()
+        {
+            ResetStateJob reset = new ResetStateJob();
+            {
+                reset.restArray = nodesState;
+            }
+            reset.Schedule(nodesState.Length, 64).Complete();
         }
         
+        private void ResiterShadow()
+        {
+            foreach (var nodeData in m_root.LowObjects)
+            {
+                nodeData.InitViewWithShadow(shadowJobHandles,maxShadowDis);
+            }
+            JobHandle.CompleteAll(shadowJobHandles);
+            RecordInstanceWihtShadow(m_root.LowObjects);
+        }
         private void RegsiterRender()
         {
             foreach (var rendererInfo in m_renderInfo)
@@ -335,10 +466,6 @@ namespace Unity.MergeInstancingSystem.Controller
                 if (info.m_renderCount == 0)
                 {
                     continue;
-                }
-                if (info.CastShadow)
-                {
-                    InstanceManager.Instance.RegisterShadowRenderlist(info);
                 }
                 switch (info.m_queue)
                 {
@@ -350,14 +477,25 @@ namespace Unity.MergeInstancingSystem.Controller
                         break;
                 }
             }
+            foreach (var rendererInfo in m_shadowInfo)
+            {
+                var info = rendererInfo.Value;
+                if (info.m_renderCount == 0)
+                {
+                    continue;
+                }
+                InstanceManager.Instance.RegisterShadowRenderlist(info);
+            }
         }
-
-
-        public void Dispose()
+        public void ResetRenderInfo()
         {
             foreach (var rendererInfo in m_renderInfo)
             {
-                rendererInfo.Value.Dispose();
+                rendererInfo.Value.ResetPool();
+            }
+            foreach (var rendererInfo in m_shadowInfo)
+            {
+                rendererInfo.Value.ResetPool();
             }
         }
         
@@ -388,7 +526,7 @@ namespace Unity.MergeInstancingSystem.Controller
             var node = Container.m_treeNodes[index];
             int HighVSCount = 0;
             int LowVSCount = 0;
-            foreach (var nodeData in node.HighObjectIds)
+            foreach (var nodeData in node.HighObjects)
             {
                 int meshIndex = nodeData.m_meshIndex;
                 int meshCount = 0;
@@ -399,7 +537,7 @@ namespace Unity.MergeInstancingSystem.Controller
                 var mesh = m_instanceData.m_meshs[meshIndex];
                 HighVSCount += mesh.vertexCount * meshCount;
             }
-            foreach (var nodeData in node.LowObjectIds)
+            foreach (var nodeData in node.LowObjects)
             {
                 int meshIndex = nodeData.m_meshIndex;
                 int meshCount = 0;
@@ -470,30 +608,25 @@ namespace Unity.MergeInstancingSystem.Controller
                     var matrixs = matrix4x4pool[i].OnePool;
                     for (int j = 0; j < count; j++)
                     {
-                        var matrix4X4 = matrixs[j];
-                        Bounds localBounds = new Bounds();
-                        if (mesh.bounds != null)
-                        {
-                            localBounds = mesh.bounds;
-                        }
-                        else
-                        {
-                            Debug.Log(mesh.name);
-                        }
-
-                        Bounds worldBounds = TransformBoundsToWorldBounds(matrix4X4, localBounds);
-                        var planes = GeometryUtility.CalculateFrustumPlanes(camera);
+                        Bounds localBounds = mesh.bounds;
+                        Bounds worldBounds = BoundsUtils.CalcLocalBounds(localBounds, matrixs[j]);
                         Color _color = Color.gray;
-                        if (GeometryUtility.TestPlanesAABB(planes, worldBounds))
+                        if (m_spaceManager.CompletelyCull(worldBounds, out var insCompletely))
                         {
-                            _color = Color.yellow;
+                            if (insCompletely)
+                            {
+                                _color = Color.black;
+                            }
+                            else
+                            {
+                                _color = Color.yellow;
+                            }
                         }
                         else
                         {
                             _color = Color.red;
                         }
-
-                        DrawGizmos(worldBounds, 1.0f,_color);
+                        DrawGizmos(worldBounds, 1.0f, _color);
                     }
                 }
             }

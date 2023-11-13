@@ -1,5 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.Mathematics;
+using Unity.MergeInstancingSystem.CustomData;
+using Unity.MergeInstancingSystem.Job;
 using Unity.MergeInstancingSystem.Utils;
 using UnityEditor;
 using UnityEngine;
@@ -17,23 +22,38 @@ namespace Unity.MergeInstancingSystem
         [SerializeField] public List<Material> m_materials;
 
         [SerializeField] public List<RenderClassState> m_renderClass;
-
-        [SerializeField] public UnityEngine.Matrix4x4[] m_Matrix4X4sData;
+        
+        /// <summary>
+        /// 矩阵以平移，缩放，旋转的形式序列化，减少内存占用
+        /// </summary>
+        [SerializeField] public List<DTransform> transforms;
 
         [SerializeField] public float[] m_LightMapIndexsData;
 
         [SerializeField] public Vector4[] m_LightMapOffsetsData;
 
+        [NonSerialized] public Matrix4x4[] m_matrix_Worlds;
         public int GetLocalToWorldMatrix4x4Count()
         {
-            return m_Matrix4X4sData.Length;
+            return m_matrix_Worlds.Length;
         }
 
-        public void BatchMaterial()
+        public void Init()
         {
+            NativeArray<DTransform> nativeTransforms = transforms.ToNativeArray(Allocator.TempJob);
+            NativeArray<Matrix4x4> tempMa = new NativeArray<Matrix4x4>(transforms.Count, Allocator.TempJob);
+            //使用多线程将数据还原成矩阵
+            var instanceDataJob = new DInstanceDataJob();
+            {
+                instanceDataJob.transforms = nativeTransforms;
+                instanceDataJob.matrix_Worlds = tempMa;
 
+            }
+            instanceDataJob.Schedule(transforms.Count,128).Complete();
+            m_matrix_Worlds = tempMa.ToArray();
+            nativeTransforms.Dispose();
+            tempMa.Dispose();
         }
-
         public void OnBeforeSerialize()
         {
 

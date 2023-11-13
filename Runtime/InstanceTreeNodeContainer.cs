@@ -25,9 +25,7 @@ namespace Unity.MergeInstancingSystem
         
         public InstanceTreeNode Get(int id)
         {
-            Profiler.BeginSample("Get Tree Node");
             var treenode = m_treeNodes[id];
-            Profiler.EndSample();
             return treenode;
            
         }

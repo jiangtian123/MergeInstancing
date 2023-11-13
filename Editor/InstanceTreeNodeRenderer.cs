@@ -24,9 +24,8 @@ namespace Unity.MergeInstancingSystem
         {
             if (node == null || node.Controller == null)
                 return;
-            
-            Vector3 min = node.Bounds.min;
-            Vector3 max = node.Bounds.max;
+            Vector3 min = ((Bounds)node.Bounds).min;
+            Vector3 max = ((Bounds)node.Bounds).max;
             
             
             m_allocatedVertices[0] = new Vector3(min.x, min.y, min.z);

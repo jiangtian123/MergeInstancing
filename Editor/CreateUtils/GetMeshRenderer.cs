@@ -25,7 +25,10 @@ namespace Unity.MergeInstancingSystem.CreateUtils
             {
                 get { return m_resultMeshRenderers; }
             }
-
+            /// <summary>
+            /// 从gameObject 中拿到Meshrenderer和LodGroup，并去除失活的
+            /// </summary>
+            /// <param name="targetGameObjects"></param>
             public MeshRendererCalculator(List<GameObject> targetGameObjects)
             {
                 for (int oi = 0; oi < targetGameObjects.Count; ++oi)
@@ -43,7 +46,7 @@ namespace Unity.MergeInstancingSystem.CreateUtils
             /// </summary>
             /// <param name="minObjectSize"></param>
             /// <param name="level">一个元素距离最高层级的距离</param>
-            public void Calculate(float minObjectSize, int level)
+            public void Calculate(float minObjectSize, int level,bool useLodReturn)
             {
                 //如果已经计算过一次就返回
                 if (m_isCalculated == true)
@@ -67,8 +70,7 @@ namespace Unity.MergeInstancingSystem.CreateUtils
                             m_meshRenderers.Remove(mr);
                         }
                     }
-
-                    AddReusltFromLODGroup(lodGroup, minObjectSize,level);
+                    AddReusltFromLODGroup(lodGroup, minObjectSize,level,useLodReturn);
                 }
 
                 for (int mi = 0; mi < m_meshRenderers.Count; ++mi)
@@ -130,13 +132,22 @@ namespace Unity.MergeInstancingSystem.CreateUtils
             /// </summary>
             /// <param name="lodGroup"></param>
             /// <param name="minObjectSize"></param>
-            private void AddReusltFromLODGroup(LODGroup lodGroup, float minObjectSize,int level)
+            private void AddReusltFromLODGroup(LODGroup lodGroup, float minObjectSize,int level,bool useReturn)
             {
                 LOD[] lods = lodGroup.GetLODs();
-
-                int index = level > lods.Length - 1 ? lods.Length - 1 : level;
-
-                Renderer[] renderers = lods[index].renderers;
+                //不包含该Lod级别时，return出去s
+                if (useReturn)
+                {
+                    if (level > lods.Length - 1)
+                    {
+                        return;
+                    }
+                }
+                else
+                {
+                    level = level > lods.Length - 1 ? lods.Length - 1 : level;
+                }
+                Renderer[] renderers = lods[level].renderers;
                 for (int ri = 0; ri < renderers.Length; ++ri)
                 {
                     MeshRenderer mr = renderers[ri] as MeshRenderer;
@@ -212,28 +223,18 @@ namespace Unity.MergeInstancingSystem.CreateUtils
                 }
             }
         }
-        /// <summary>
-        /// 按照层级拿物体的Renderer
-        /// </summary>
-        /// <param name="gameObject"></param>
-        /// <param name="currentNodeBounds"></param>
-        /// <param name="minObjectSize"></param>
-        /// <param name="level"></param>
-        /// <returns></returns>
-        public static List<MeshRenderer> GetMeshRenderers(GameObject gameObject, float minObjectSize,int level)
+        
+        public static List<MeshRenderer> GetMeshRenderers(GameObject gameObject, float minObjectSize,int level,bool useLodReturn = false)
         {
             List<GameObject> tmpList = new List<GameObject>();
             tmpList.Add(gameObject);
 
             MeshRendererCalculator calculator = new MeshRendererCalculator(tmpList);
-            calculator.Calculate(minObjectSize, level);
+            calculator.Calculate(minObjectSize, level,useLodReturn);
             return calculator.ResultMeshRenderers;
         }
-        /// <summary>
-        /// 取一个物体下面的meshrender，但是只拿lod0级别的，如果没有lodgroup，就取所有的
-        /// </summary>
-        /// <param name="gameObject"></param>
-        /// <returns></returns>
+     
+        
         public static List<MeshRenderer> GetMeshRenderers(GameObject gameObject, float minObjectSize)
         {
             List<GameObject> tmpList = new List<GameObject>();

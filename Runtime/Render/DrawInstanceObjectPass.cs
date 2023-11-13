@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Mathematics;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Profiling;
@@ -18,6 +20,7 @@ namespace Unity.MergeInstancingSystem.Render
         private static readonly ProfilingSampler m_ProfilingRenderInstanceHaveMotionVectors = new ProfilingSampler(k_HaveMotionVectorInstanceTag);
         private List<IRendererInstanceInfo> renderData;
         float lastTime = 0;
+        private readonly int MAX_BUFFCOUNT = 1000;
         public DrawInstanceObjectPass(RenderPassEvent evt)
         {
             isUseMotionVectors = false;

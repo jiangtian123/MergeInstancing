@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using Unity.MergeInstancingSystem.CustomData;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -61,6 +62,7 @@ namespace Unity.MergeInstancingSystem.Utils
         }
         public int GetAssetIndex(Material material)
         {
+            material.enableInstancing = true;
             return m_materials.IndexOf(material);
         }
         public int GetAssetIndex(MinGameObject minObj)
@@ -83,15 +85,15 @@ namespace Unity.MergeInstancingSystem.Utils
             }
         }
 
-        public Matrix4x4[] GetMatrix4X4s()
+        public List<DTransform> GetMatrix4X4s()
         {
-            List<Matrix4x4> temp = new List<Matrix4x4>();
+            List<DTransform> temp = new List<DTransform>();
             for (int i = 0; i < m_minGameObjects.Count; i++)
             {
                 temp.Add(m_minGameObjects[i].m_localtoworld);
             }
-
-            return temp.ToArray();
+            
+            return temp;
         }
         public float[] GetLightMapIndexs()
         {

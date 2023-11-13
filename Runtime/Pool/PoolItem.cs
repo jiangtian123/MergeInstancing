@@ -1,4 +1,4 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Matrix4x4 = System.Numerics.Matrix4x4;
@@ -125,28 +125,11 @@ namespace Unity.MergeInstancingSystem.Pool
             return m_item;
         }
         /// <summary>
-        /// 加一个元素,有装箱拆箱的问题
-        /// </summary>
-        /// <param name="item"></param>
-        public void Add(object item)
-        {
-            //当前list中的使用的那个pool满了
-            if (m_item[m_Index].IsFull)
-            {
-                Expande();
-                m_Index += 1;
-            }
-            var pool = m_item[m_Index];
-            pool.OnePool[pool.length] = (T)item;
-            pool.length += 1;
-        }
-        /// <summary>
         /// 拷贝多数元素
         /// </summary>
         /// <param name="source">原数组</param>
         /// <param name="head">原数组的开头</param>
         /// <param name="length">要拷贝的长度</param>
-        
         public void CopyToArray(object source,int head,int length)
         {
             var so = (T[])source;

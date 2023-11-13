@@ -54,5 +54,79 @@ namespace Unity.MergeInstancingSystem
 
         }
         public List<int> Distances = new List<int>();
+        public Bounds CalculateRealBound()
+        {
+            Bounds ret = new Bounds();
+            ret.center = Vector3.zero;
+            ret.size = Vector3.zero;
+            if (classificationObjects.Count == 0)
+            {
+                return ret;
+            }
+
+            List<Bounds> tempBoxs = new List<Bounds>();
+            foreach (var nObjectsValue in classificationObjects.Values)
+            {
+                var mesh = nObjectsValue.m_mesh;
+                var localBox = mesh.bounds;
+                var worldBox = BoundsUtils.CalcLocalBounds(localBox,nObjectsValue.m_gameobjs[0].m_localtoworld);
+                for (int i = 1; i < nObjectsValue.m_gameobjs.Count; i++)
+                {
+                    worldBox.Encapsulate(BoundsUtils.CalcLocalBounds(localBox,
+                        nObjectsValue.m_gameobjs[i].m_localtoworld));
+                }
+                tempBoxs.Add(worldBox);
+            }
+
+            var objBound = tempBoxs[0];
+            for (int i = 1; i < tempBoxs.Count; i++)
+            {
+                objBound.Encapsulate(tempBoxs[i]);
+            }
+            ret.center = objBound.center;
+            ret.size = objBound.size;
+            return ret;
+        }
+        Bounds TransformBoundsToWorldBounds(UnityEngine.Matrix4x4 Worldmatrix, Bounds localBounds)
+        {
+            Vector3 min = localBounds.min;
+            Vector3 max = localBounds.max;
+            Matrix4x4 matrix = Worldmatrix;
+
+            Vector3[] points = new[]
+            {
+                new Vector3(min.x, min.y, min.z),
+                new Vector3(max.x, min.y, min.z),
+                new Vector3(min.x, min.y, max.z),
+                new Vector3(max.x, min.y, max.z),
+                new Vector3(min.x, max.y, min.z),
+                new Vector3(max.x, max.y, min.z),
+                new Vector3(min.x, max.y, max.z),
+                new Vector3(max.x, max.y, max.z),
+            };
+
+            for (int i = 0; i < points.Length; ++i)
+            {
+                points[i] = matrix.MultiplyPoint(points[i]);
+            }
+
+            Vector3 newMin = points[0];
+            Vector3 newMax = points[0];
+
+            for (int i = 1; i < points.Length; ++i)
+            {
+                if (newMin.x > points[i].x) newMin.x = points[i].x;
+                if (newMax.x < points[i].x) newMax.x = points[i].x;
+                
+                if (newMin.y > points[i].y) newMin.y = points[i].y;
+                if (newMax.y < points[i].y) newMax.y = points[i].y;
+                
+                if (newMin.z > points[i].z) newMin.z = points[i].z;
+                if (newMax.z < points[i].z) newMax.z = points[i].z;
+            }
+            Bounds newBounds = new Bounds();
+            newBounds.SetMinMax(newMin, newMax);
+            return newBounds;
+        }
     }
 }

@@ -1,9 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using Unity.MergeInstancingSystem.Render;
+using Unity.MergeInstancingSystem.CustomData;
 using UnityEngine;
-using UnityEngine.Rendering;
-using Matrix4x4 = System.Numerics.Matrix4x4;
+
 
 namespace Unity.MergeInstancingSystem.Utils
 {
@@ -22,7 +20,7 @@ namespace Unity.MergeInstancingSystem.Utils
             }
         }
         public float? m_lightMapIndex;
-        public UnityEngine.Matrix4x4 m_localtoworld;
+        public DTransform m_localtoworld;
         public Vector4? m_lightMapOffest;
         public MinGameObject(Renderer renderer,int subMeshIndex,bool useLightMap)
         {
@@ -35,7 +33,9 @@ namespace Unity.MergeInstancingSystem.Utils
                 m_lightMapIndex = (float)renderer.lightmapIndex;
                 m_lightMapOffest = renderer.lightmapScaleOffset;
             }
-            m_localtoworld = renderer.localToWorldMatrix;
+
+            m_localtoworld =  new DTransform(renderer.transform.position, renderer.transform.rotation,
+                renderer.transform.lossyScale);
         }
         public override bool Equals(object obj)
         {

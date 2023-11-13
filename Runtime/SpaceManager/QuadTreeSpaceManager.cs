@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Profiling;
 
 namespace Unity.MergeInstancingSystem.SpaceManager
 {
@@ -10,7 +11,7 @@ namespace Unity.MergeInstancingSystem.SpaceManager
         /// 根节点下相机的空间
         /// </summary>
         private Vector3 camPosition;
-
+        
         private Camera m_camera;
 
         private List<Vector3> points;
@@ -78,29 +79,34 @@ namespace Unity.MergeInstancingSystem.SpaceManager
         /// <returns></returns>
         public bool IsCull(float cullDistance, Bounds bounds)
         {
-            var planes =  CameraRecognizerManager.ActiveRecognizer.planes;
-            if (!GeometryUtility.TestPlanesAABB(planes,bounds))
-            {
-                return true;
-            }
-            
-            float camer_farDis = m_camera.farClipPlane;
+            Profiler.BeginSample("Culling");
             float distance = GetDistance(bounds.center, camPosition);
-            float bais = bounds.size.x * preRelative;
-            float relativeHeight = distance / (camer_farDis + bais);
-            return relativeHeight > 1 - cullDistance;
+            //bound.size是包围盒的长宽高，包围盒是个立方体
+            // preRelative 是 视锥体一半的 0.5/tanΘ。
+            // bounds.size.x * preRelative = y * 0.5 / tanΘ * bais
+            //bais越大，越不容易被剔除。
+            float relativeHeight = bounds.size.x * preRelative / distance;
+            Profiler.EndSample();
+            return relativeHeight < cullDistance;
         }
-        //----------- 这个地方有点问题，每帧GC很多 ------------------------------------------------。
         /// <summary>
-        /// 如果包围盒有一个顶点在视锥体的外面就返回false
+        /// 
         /// </summary>
-        /// <param name="box"></param>
-        /// <returns></returns>
-        public bool IsBOXInsideViewFrustum(Bounds box)
-        {
-            var frustumPlanes = CameraRecognizerManager.ActiveRecognizer.planes;
-            Vector3 min = box.min;
-            Vector3 max = box.max;
+        /// <param name="bounds"></param>
+        /// <param name="isCompletely">是否需要逐个剔除</param>
+        /// <returns>true 就是在视锥体内</returns>
+        public bool CompletelyCull(Bounds bounds, out bool isCompletely)
+        { 
+            Profiler.BeginSample("Completely Cull");
+            var planes =  CameraRecognizerManager.ActiveRecognizer.planes;
+            isCompletely = false;
+            Vector3 min = bounds.min;
+            Vector3 max = bounds.max;
+            if (min == max)
+            {
+                Profiler.EndSample();
+                return false;
+            }
             points[0] = new Vector3(min.x, min.y, min.z);
             points[1] = new Vector3(min.x, min.y, max.z);
             points[2] = new Vector3(max.x, min.y, max.z);
@@ -110,28 +116,32 @@ namespace Unity.MergeInstancingSystem.SpaceManager
             points[5] = new Vector3(min.x, max.y, max.z);
             points[6] = new Vector3(max.x, max.y, max.z);
             points[7] = new Vector3(max.x, max.y, min.z);
-            foreach (var point in points)
+            for(int p = 0; p < (int)planes.Length; ++p)
             {
-                //左面
-                if (!frustumPlanes[0].GetSide(point))
+                bool inside = false;
+                for(int c = 0; c < 8; ++c)
                 {
-                    return true;
+                    //用包围盒8个点判断
+                    //只要有一个点在这个面里面，就不判断了
+                    if(planes[p].GetSide(points[c]))
+                    {
+                        inside = true;
+                        break;
+                    }
+                    isCompletely = true;
                 }
-                //右面
-                if (!frustumPlanes[1].GetSide(point))
+                //所有顶点都在包围盒外，被剔除。
+                if(!inside)
                 {
-                    return true;
-                }
-                //前面
-                if (!frustumPlanes[4].GetSide(point))
-                {
-                    return true;
+                    isCompletely = true;
+                    Profiler.EndSample();
+                    return false;
                 }
             }
-
-            return false;
+            Profiler.EndSample();
+            return true;
         }
-
+        
         /// <summary>
         /// 计算包围盒和相机在xz平面上的距离
         /// </summary>

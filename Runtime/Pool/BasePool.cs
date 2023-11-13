@@ -7,7 +7,7 @@ namespace Unity.MergeInstancingSystem.Pool
         public int ID { get; }
 
         public Type Type { get; }
-        public int Capacity { get; }
+        
         public int Count { get; }
         
         void CopyToArray(object source, int head, int length);

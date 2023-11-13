@@ -10,12 +10,12 @@ namespace Unity.MergeInstancingSystem.Utils
         /// <param name="renderer">附带包围盒的renderer</param>
         /// <param name="transform"></param>
         /// <returns>返回的是物体坐标空间下的AABB包围盒</returns>
-        public static Bounds CalcLocalBounds(Renderer renderer, Transform transform)
+        public static Bounds CalcLocalBounds(Bounds localBounds, Matrix4x4 localToWorld)
         {
-            Bounds bounds = renderer.bounds;
+            Bounds bounds = localBounds;
             Vector3 min = bounds.min;
             Vector3 max = bounds.max;
-            Matrix4x4 matrix = transform.worldToLocalMatrix;
+            Matrix4x4 matrix = localToWorld;
 
             Vector3[] points = new[]
             {

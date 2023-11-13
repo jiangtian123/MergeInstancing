@@ -194,10 +194,6 @@ namespace Unity.MergeInstancingSystem.Render
             cmd.Clear();
             foreach (var rendererInstanceInfo in renderData)
             {
-                if (JudgeDis(rendererInstanceInfo.Dis))
-                {
-                    continue;
-                }
                 var pool = rendererInstanceInfo.GetMatrix4x4();
                 var poolCountcount = rendererInstanceInfo.GetPoolCount();
                 var mesh = rendererInstanceInfo.GetMesh();
