@@ -47,9 +47,6 @@ namespace Unity.MergeInstancingSystem
 
         [SerializeField] private List<NodeData> m_lowObjects = new List<NodeData>();
         
-        
-        
-        UnityEngine.Profiling.CustomSampler UpdateSampler;
         public enum State
         {
             Release,
@@ -78,18 +75,7 @@ namespace Unity.MergeInstancingSystem
             set { m_LowCullBounds = value; }
             get { return m_LowCullBounds; }
         }
-
-        public int ChildNumber
-        {
-            get
-            {
-                return childCount;
-            }
-            set
-            {
-                childCount = value;
-            }
-        }
+        
         public List<NodeData> LowObjects
         {
             set
@@ -141,7 +127,6 @@ namespace Unity.MergeInstancingSystem
             m_controller = controller;
             m_spaceManager = spaceManager;
             m_boundsLength = m_bounds.extents.x * m_bounds.extents.x + m_bounds.extents.z * m_bounds.extents.z;
-            UpdateSampler = UnityEngine.Profiling.CustomSampler.Create("UpDate Tree Node");
             var taskHandles = new NativeList<JobHandle>(256, Allocator.Temp);
             foreach (var VARIABLE in m_highObjects)
             {
@@ -167,7 +152,6 @@ namespace Unity.MergeInstancingSystem
             if (m_spaceManager.IsCull(m_controller.CullDistance,m_bounds))
             {
                     m_expectedState = State.Release;
-                    //UpdateSampler.End();
                     return;
             }
             m_expectedState = m_spaceManager.IsHigh(lodDistance, m_bounds) ? State.High : State.Low;
@@ -179,7 +163,6 @@ namespace Unity.MergeInstancingSystem
                 if (!m_spaceManager.CompletelyCull(m_LowCullBounds, out cullObj))
                 {
                     m_expectedState = State.Release;
-                    //UpdateSampler.End();
                     return;
                 }
                 //如果有一部分在外面，则退化成High，去判断子
@@ -212,7 +195,6 @@ namespace Unity.MergeInstancingSystem
                 //如果状态为Low就直接提交
                 m_controller.RecordInstance(m_lowObjects); 
             }
-            //UpdateSampler.End();
         }
 
         public unsafe void UpdateWithJob(NativeList<JobHandle> tasJobHandles,bool useJob,int litmitLevel,int index)
@@ -289,15 +271,15 @@ namespace Unity.MergeInstancingSystem
                 if (isNeedSubmit)
                 {
                     m_expectedState = State.High;
-                    if (isNeedMoreCull && usePreciseCulling)
-                    {
-                        foreach (var nodeData in m_highObjects)
-                        {
-                            nodeData.InitView(nodetaskHandles,CameraRecognizerManager.ActiveRecognizer.planes);
-                        }
-                    }
-                    JobHandle.CompleteAll(nodetaskHandles);
-                    m_controller.RecordInstance(m_highObjects); 
+                    // if (isNeedMoreCull && usePreciseCulling)
+                    // {
+                    //     foreach (var nodeData in m_highObjects)
+                    //     {
+                    //         nodeData.InitView(nodetaskHandles,CameraRecognizerManager.ActiveRecognizer.planes);
+                    //     }
+                    // }
+                    //JobHandle.CompleteAll(nodetaskHandles);
+                    m_controller.RecordInstance(m_highObjects,isNeedMoreCull && usePreciseCulling); 
                 }
 
                 for (int i = 0; i < m_childTreeNodeIds.Count; ++i)
@@ -311,16 +293,16 @@ namespace Unity.MergeInstancingSystem
             {
                 if (isNeedSubmit)
                 {
-                    if (isNeedMoreCull && usePreciseCulling)
-                    {
-                        foreach (var nodeData in m_highObjects)
-                        {
-                            nodeData.InitView(nodetaskHandles,CameraRecognizerManager.ActiveRecognizer.planes);
-                        }
-                    }
-                    JobHandle.CompleteAll(nodetaskHandles);
+                    // if (isNeedMoreCull && usePreciseCulling)
+                    // {
+                    //     foreach (var nodeData in m_highObjects)
+                    //     {
+                    //         nodeData.InitView(nodetaskHandles,CameraRecognizerManager.ActiveRecognizer.planes);
+                    //     }
+                    // }
+                    //JobHandle.CompleteAll(nodetaskHandles);
                     m_expectedState = State.Low;
-                    m_controller.RecordInstance(m_lowObjects); 
+                    m_controller.RecordInstance(m_lowObjects,isNeedMoreCull && usePreciseCulling); 
                 }
             }
         }

@@ -44,7 +44,6 @@ namespace Unity.MergeInstancingSystem.Job
         }
     }
     
-    [BurstCompile]
     public unsafe struct DInstanceDataJob : IJobParallelFor
     {
         [Collections.ReadOnly] 
@@ -62,7 +61,6 @@ namespace Unity.MergeInstancingSystem.Job
     /// <summary>
     /// 求一个节点内的HighObj的包围盒
     /// </summary>
-
     public unsafe struct DInitNodeDataBox : IJob
     {
         [Collections.ReadOnly]
@@ -89,136 +87,6 @@ namespace Unity.MergeInstancingSystem.Job
             }
         }
     }
-
-    public unsafe struct TreeNodeCullJob : IJob
-    {
-        [NativeDisableUnsafePtrRestriction]
-        [Collections.ReadOnly]
-        public DAABB* sectionBounds;
-        
-        public int length;
-        public float preRelative;
-        public float3 cameraPos;
-        public float lodDis;
-        public float cullDis;
-        public float shadowDis;
-        
-        [WriteOnly]
-        public NativeArray<byte> visibleMap;
-        
-        public void Execute()
-        {
-            for (int index = 0; index < length; ++index)
-            {
-                int visible = 0x0;
-                int highOrLow = 0x0;
-                ref DAABB sectorBound = ref sectionBounds[index];
-                float distance = Geometry.GetDistance(cameraPos, sectorBound.center);
-                int shadow = distance - sectorBound.size.x < shadowDis ? 1 : 0;
-                float relativeHeight = sectorBound.size.x * preRelative / distance;
-                visible = relativeHeight < cullDis ? 0 : 1;
-                if (visible !=0 )
-                {
-                    highOrLow = Geometry.IsHigh(lodDis, sectorBound, preRelative, cameraPos) ? 1 : 0;
-                }
-                int result = (shadow << 2) | (highOrLow << 1) | visible;
-                visibleMap[index] = (byte)result;
-            }
-        }
-    }
-
-    public unsafe struct TreeNodeCullParallelJob : IJobParallelFor
-    {
-        [NativeDisableUnsafePtrRestriction] 
-        [Collections.ReadOnly]
-        public DAABB* sectionBounds;
-        
-        public float preRelative;
-        public float3 cameraPos;
-        public float lodDis;
-        public float cullDis;
-        public float shadowDis;
-        
-        [WriteOnly]
-        public NativeArray<byte> visibleMap;
-        public void Execute(int index)
-        {
-            int visible = 0x0;
-            int highOrLow = 0x0;
-            ref DAABB sectorBound = ref sectionBounds[index];
-            float distance = Geometry.GetDistance(cameraPos, sectorBound.center);
-            int shadow = distance - sectorBound.size.x < shadowDis ? 1 : 0;
-            float relativeHeight = sectorBound.size.x * preRelative / distance;
-            visible = relativeHeight < cullDis ? 0 : 1;
-            if (visible != 0)
-            {
-                highOrLow = Geometry.IsHigh(lodDis, sectorBound, preRelative, cameraPos) ? 1 : 0;
-            }
-            int result = (shadow << 2) | (highOrLow << 1) | visible;
-            visibleMap[index] = (byte)result;
-        }
-    }
-
-    public unsafe struct TreeNodeCullWithPlane : IJobParallelFor
-    {
-        [NativeDisableUnsafePtrRestriction] 
-        [Collections.ReadOnly]
-        public DPlane* planes;
-        
-        [NativeDisableUnsafePtrRestriction] 
-        [Collections.ReadOnly]
-        public DAABB* sectionBounds;
-        
-        [WriteOnly]
-        public NativeArray<byte> visibleMap;
-        public void Execute(int index)
-        {
-            ref DAABB sectorBound = ref sectionBounds[index];
-            int isCompletely = 0;
-            int visible = 0;
-            NativeArray<float3> points = new NativeArray<float3>(8, Allocator.Temp);
-            float3 min = sectorBound.min;
-            float3 max = sectorBound.max;
-            if ((min.x == max.x) && (min.y == max.y) && (min.z == max.z))
-            {
-                return;
-            }
-            points[0] = new float3(min.x, min.y, min.z);
-            points[1] = new float3(min.x, min.y, max.z);
-            points[2] = new float3(max.x, min.y, max.z);
-            points[3] = new float3(max.x, min.y, min.z);
-            
-            points[4] = new float3(min.x, max.y, min.z);
-            points[5] = new float3(min.x, max.y, max.z);
-            points[6] = new float3(max.x, max.y, max.z);
-            points[7] = new float3(max.x, max.y, min.z);
-            for(int p = 0; p < 6; ++p)
-            {
-                bool inside = false;
-                for(int c = 0; c < 8; ++c)
-                {
-                    //用包围盒8个点判断
-                    //只要有一个点在这个面里面，就不判断了
-                    if(planes[p].GetSide(points[c]))
-                    {
-                        inside = true;
-                        break;
-                    }
-                    isCompletely = 1;
-                }
-                //所有顶点都在包围盒外，被剔除。
-                if(!inside)
-                {
-                    isCompletely = 1;
-                    visible = 0;
-                    break;
-                }
-                visible = 1;
-            }
-            visibleMap[index] = (byte)((isCompletely << 1) |visible);
-        }
-    }
-
     public unsafe struct TreeCullingJob : IJob
     {
         [Collections.ReadOnly]
@@ -281,7 +149,6 @@ namespace Unity.MergeInstancingSystem.Job
         }
         
     }
-
     public unsafe struct TreeNodeUpdate : IJob
     {
         [Collections.ReadOnly] 
@@ -409,7 +276,6 @@ namespace Unity.MergeInstancingSystem.Job
         }
         
     }
-    
     public struct ResetStateJob : IJobParallelFor
     {
         [WriteOnly] 
@@ -467,34 +333,4 @@ namespace Unity.MergeInstancingSystem.Job
         }
     }
     
-    public unsafe struct NodeDataCopy : IJob
-    {
-        [Collections.ReadOnly]
-        [NativeDisableUnsafePtrRestriction]
-        public float4x4* localToWords;
-        [Collections.ReadOnly]
-        [NativeDisableUnsafePtrRestriction]
-        public int* lightMapIndex;
-        [Collections.ReadOnly]
-        [NativeDisableUnsafePtrRestriction]
-        public float4* lightmapOffest;
-        public bool useLight;
-
-        public NativeArray<NodeData.ListInfo> listIndex;
-
-        [WriteOnly]
-        public NativeList<float4x4> matrixResult;
-        [WriteOnly]
-        public NativeList<int> indexResult;
-        [WriteOnly]
-        public NativeList<float4> offestResult;
-        public void Execute()
-        {
-            for (int i = 0; i < listIndex.Length; i++)
-            {
-                int head = listIndex[i].head;
-                int length = listIndex[i].length;
-            }
-        }
-    }
 }

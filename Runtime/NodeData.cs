@@ -48,7 +48,7 @@ namespace Unity.MergeInstancingSystem
         [SerializeField]
         public bool m_NeedLightMap;
 
-        private NativeArray<DAABB> m_boundBoxs;
+        public NativeArray<DAABB> m_boundBoxs;
 
         public int objCount;
 

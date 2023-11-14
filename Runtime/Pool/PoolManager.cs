@@ -90,7 +90,7 @@ namespace Unity.MergeInstancingSystem.Pool
         {
             try
             {
-                Profiler.BeginSample("Copr data");
+                Profiler.BeginSample("Copy data");
                 var pool = m_pools[poolID];
                 pool.CopyToArray(source,head,length);
                 Profiler.EndSample();

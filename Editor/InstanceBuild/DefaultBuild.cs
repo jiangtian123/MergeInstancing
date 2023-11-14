@@ -246,7 +246,6 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             root.Bounds = rootNode.Bounds;
             root.SetContainer(container);
             root.HighCullBounds = rootNode.CalculateRealBound();
-            root.ChildNumber = CountSubtrees(rootNode)- 1;
             for (int i = 0; i < rootNode.GetChildCount(); i++)
             {
                 root.SetChildTreeNode(Helper(container,rootNode.GetChild(i),level+1));

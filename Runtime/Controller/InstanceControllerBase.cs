@@ -194,7 +194,8 @@ namespace Unity.MergeInstancingSystem.Controller
         /// </summary>
 
         [SerializeField] private InstanceData m_instanceData;
-        
+
+        [SerializeField] private int shadowCullLevel;
         
         UnityEngine.Profiling.CustomSampler UpdateSampler;
         UnityEngine.Profiling.CustomSampler ResetState;
@@ -269,7 +270,7 @@ namespace Unity.MergeInstancingSystem.Controller
         /// </summary>
         /// <param name="rendererObj"></param>
         /// <param name="dis">当前节点距离相机的位置</param>
-        public void RecordInstance(List<NodeData> rendererObj)
+        public void RecordInstance(List<NodeData> rendererObj,bool usePreciseCulling = false)
         {
             try
             {
@@ -281,7 +282,8 @@ namespace Unity.MergeInstancingSystem.Controller
                     long identifier = nodeData.m_identifier;
                     if (m_renderInfo.TryGetValue(identifier,out var rendererInfo))
                     {
-                        AddDataToPool(nodeData,rendererInfo);
+                        
+                        AddDataToPool(nodeData,rendererInfo,usePreciseCulling);
                     }
                     else
                     {
@@ -294,7 +296,7 @@ namespace Unity.MergeInstancingSystem.Controller
                         tempInfo.m_SubMeshIndex = nodeData.subMeshIndex;
                         tempInfo.useLightMapOrLightProbe = nodeData.m_NeedLightMap;
                         tempInfo.m_instanceBlock = nodeData.m_propretyBlock;
-                        AddDataToPool(nodeData, tempInfo);
+                        AddDataToPool(nodeData, tempInfo,usePreciseCulling);
                         m_renderInfo.Add(identifier,tempInfo);
                     }
                 }
@@ -381,7 +383,7 @@ namespace Unity.MergeInstancingSystem.Controller
         /// <param name="nodeData">节点保存的数据信息</param>
         /// <param name="rendererInfo"></param>
         /// <param name="cullOBJ">是否挨个剔除节点中的OBJ</param>
-        private void AddDataToPool(NodeData nodeData,RendererInfo rendererInfo)
+        private void AddDataToPool(NodeData nodeData,RendererInfo rendererInfo,bool usePreciseCulling)
         {
             var poolId = rendererInfo.m_poolID;
             var lightMapIndexSource = m_instanceData.m_LightMapIndexsData;
@@ -389,19 +391,68 @@ namespace Unity.MergeInstancingSystem.Controller
             var Matrix4x4Source = m_instanceData.m_matrix_Worlds;
             var renderDataList = nodeData.RenderData;
             nodeData.ResetState();
-            //这里之前有GC
             for (int j = 0; j < renderDataList.Length; j++)
             {
-                var listInfo = renderDataList[j];
-                int head = listInfo.head;
-                int length = listInfo.length;
-                rendererInfo.m_renderCount += length;
-                PoolManager.Instance.CopyData(poolId.m_matrix4x4ID, Matrix4x4Source, head, length);
-                if (nodeData.m_NeedLightMap && head >= 0)
+                if (usePreciseCulling)
                 {
-                    PoolManager.Instance.CopyData(poolId.m_lightMapIndexId, lightMapIndexSource, head, length);
-                    PoolManager.Instance.CopyData(poolId.m_lightMapScaleOffsetID, lightMapScaleOffsetSource, head,
-                        length);
+                    var listInfo = renderDataList[j];
+                    int head = listInfo.head;
+                    int length = 0;
+                    for (int i = 0; i < listInfo.length; i++)
+                    {
+                        float2 distRadius = new float2(0, 0);
+                        var box = nodeData.m_boundBoxs[i + j];
+                        bool isPass = true;
+                        for (int PlaneIndex = 0; PlaneIndex < 6; ++PlaneIndex)
+                        {
+                            DPlane plane = CameraRecognizerManager.ActiveRecognizer.planes[PlaneIndex];
+                            distRadius.x = math.dot(plane.normalDist.xyz, box.center) + plane.normalDist.w;
+                            distRadius.y = math.dot(math.abs(plane.normalDist.xyz), box.extents);
+                            if (distRadius.x + distRadius.y < 0)
+                            {
+                                isPass = false;
+                                break;
+                            }
+                        }
+                        if (isPass)
+                        {
+                            length += 1;
+                        }
+                        else if (length == 0)
+                        {
+                            head++;
+                        }
+
+                        if ((i + 1 == listInfo.length || !isPass) && length != 0)
+                        {
+                            rendererInfo.m_renderCount += length;
+                            PoolManager.Instance.CopyData(poolId.m_matrix4x4ID, Matrix4x4Source, head, length);
+                            if (nodeData.m_NeedLightMap && head >= 0)
+                            {
+                                PoolManager.Instance.CopyData(poolId.m_lightMapIndexId, lightMapIndexSource, head,
+                                    length);
+                                PoolManager.Instance.CopyData(poolId.m_lightMapScaleOffsetID, lightMapScaleOffsetSource,
+                                    head,
+                                    length);
+                            }
+                            head += (length + 1);
+                            length = 0;
+                        }
+                    }
+                }
+                else
+                {
+                    var listInfo = renderDataList[j];
+                    int head = listInfo.head;
+                    int length = listInfo.length;
+                    rendererInfo.m_renderCount += length;
+                    PoolManager.Instance.CopyData(poolId.m_matrix4x4ID, Matrix4x4Source, head, length);
+                    if (nodeData.m_NeedLightMap && head >= 0)
+                    {
+                        PoolManager.Instance.CopyData(poolId.m_lightMapIndexId, lightMapIndexSource, head, length);
+                        PoolManager.Instance.CopyData(poolId.m_lightMapScaleOffsetID, lightMapScaleOffsetSource, head,
+                            length);
+                    }
                 }
             }
         }
@@ -455,6 +506,7 @@ namespace Unity.MergeInstancingSystem.Controller
             {
                 nodeData.InitViewWithShadow(shadowJobHandles,maxShadowDis);
             }
+            
             JobHandle.CompleteAll(shadowJobHandles);
             RecordInstanceWihtShadow(m_root.LowObjects);
         }
