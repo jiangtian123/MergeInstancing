@@ -186,7 +186,6 @@ namespace Unity.MergeInstancingSystem
                         "There is no SpaceSplitter. Please set the SpaceSplitter.",
                         "OK");
                     yield break;
-                    
                 }
                 //开始划分
                 List<SpaceNode> rootNodeList = spliter.CreateSpaceTree(bounds, ins.ChunkSize, ins.transform, instanceTargets, progress =>
@@ -209,37 +208,10 @@ namespace Unity.MergeInstancingSystem
                         "Ok");
                     yield break;
                 }
-
                 for (int ri = 0; ri < rootNodeList.Count; ++ri)
                 {
                     var rootNode = rootNodeList[ri];
-                    AllInstanceData instanceData = ObjectUtils.GetInstanceData(rootNode);
-                    //先将树中的Obj按照材质和Mesh分类
-                    //之前有个BUG，拿的是所有的LOD级别的，应该只拿第一层级的
-                    rootNode.ClassificationTree();
-                    //
-                    List<InstanceBuildInfo> buildInfos = CreateBuildInfo(ins, rootNode, ins.MinObjectSize);
-
-                    //得到的是 按照后序遍历展开的四叉树的节点中的 Instance 信息
-                    
-                    //--------------------------- 到这里的数据 ----------------------------------------------------------------------------------
-                    // 1. 四叉树，每个节点有按照包围盒放进去的 Object
-                    // 2. InstanceBuildInfo ， 按层展开的四叉树，每个节点对应一个四叉树的节点，存放的是包含子节点物体在内的所有 renderer（按层级取不同的lod）。
-                    // 3. AllInstanceData 整个Instance 下，所有的 Mesh，material，矩阵。
-
-                    //这边留一个给后面做MergeInstance的接口，现在先不管。
-                    // using (IMeshUtils meshUtils = (IMeshUtils)Activator.CreateInstance(ins.MeshUtilsType,new object[]{ins.MeshUtilsOptions}))
-                    // {
-                    //     meshUtils.PeocessInstanceData(progress =>
-                    //     {
-                    //         EditorUtility.DisplayProgressBar("Bake Instacne", "Generating Combine Mesh Buffer.",
-                    //             0.5f + progress * 0.25f);
-                    //     });
-                    // }
-                    //先不做很多处理，按照材质类型和mesh类型处理每个节点，做instance分类。
                     GameObject targetGameObject = ins.gameObject;
-                    //If there are more than 1 rootNode, the Instance use sub tree.
-                    //So we should separate GameObject to generate Streaming component.
                     if (rootNodeList.Count > 1)
                     {
                         GameObject newTargetGameObject = new GameObject($"{targetGameObject.name}_SubTree{ri}");
@@ -248,13 +220,10 @@ namespace Unity.MergeInstancingSystem
 
                         targetGameObject = newTargetGameObject;
                     }
-
                     IInstanceBuild builder =
                         (IInstanceBuild)Activator.CreateInstance(ins.BuildType,
                             new object[] { ins, ri, ins.BuildOptions });
-                    builder.Build(rootNode, buildInfos, instanceData, targetGameObject, ins.CullDistance,
-                        ins.LODDistance, false,ins.UseMotionvector,ins.PreciseCulling,
-                        true,
+                    builder.Build(rootNode, targetGameObject, ins,
                         progress =>
                         {
                             EditorUtility.DisplayProgressBar("Bake Instance", "Storing results.",

@@ -1,5 +1,8 @@
-﻿using UnityEditor;
+﻿using TreeEditor;
+using UnityEditor;
 using UnityEngine;
+using TreeNode = Unity.MergeInstancingSystem.New.TreeNode;
+
 namespace Unity.MergeInstancingSystem
 {
     public class InstanceTreeNodeRenderer
@@ -20,12 +23,12 @@ namespace Unity.MergeInstancingSystem
         #endregion
         private Vector3[] m_allocatedVertices = new Vector3[8];
         #region public
-        public void Render(InstanceTreeNode node, Color color, float width)
+        public void Render(TreeNode node, Color color, float width)
         {
-            if (node == null || node.Controller == null)
+            if (node == null || node.m_controller == null)
                 return;
-            Vector3 min = ((Bounds)node.Bounds).min;
-            Vector3 max = ((Bounds)node.Bounds).max;
+            Vector3 min = ((Bounds)node.m_Box).min;
+            Vector3 max = ((Bounds)node.m_Box).max;
             
             
             m_allocatedVertices[0] = new Vector3(min.x, min.y, min.z);

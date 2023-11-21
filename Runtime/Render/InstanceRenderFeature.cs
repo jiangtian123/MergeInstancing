@@ -23,35 +23,34 @@ namespace Unity.MergeInstancingSystem.Render
         
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
-            if (!InstanceManager.Instance.useInstance)
-            {
-                return;
-            }
+            if (Application.isPlaying == false) { return; }
             var stack = VolumeManager.instance.stack;
             var Taa = stack.GetComponent<TAAVolume>();
             bool applyPostProcessing = renderingData.cameraData.postProcessEnabled;
             bool isMotionVector = false;
             if (Taa.IsActive() && applyPostProcessing)
             {
-                if ((TAAQuality)Taa.quality == TAAQuality.HIGH && InstanceManager.Instance.useMotionvector)
+                if ((TAAQuality)Taa.quality == TAAQuality.HIGH)
                 {
                     isMotionVector = true;
                 }
             }
 
             InitRenderData();
-            if (m_shadowPass.Setup(InstanceManager.Instance.ShadowRenderlist, ref renderingData))
+            if (m_shadowPass.Setup(ref renderingData))
             {
                 renderer.EnqueuePass(m_shadowPass);
             }
-            m_OpaquePass.Setup(isMotionVector, InstanceManager.Instance.OpaqueRenderlist, layer);
-            m_TransparentPass.Setup(isMotionVector, InstanceManager.Instance.TransparentRenderlist, layer);
+            m_OpaquePass.Setup(isMotionVector, layer,RenderQueue.Geometry);
+            m_TransparentPass.Setup(isMotionVector,layer,RenderQueue.Transparent);
             renderer.EnqueuePass(m_OpaquePass);
             renderer.EnqueuePass(m_TransparentPass);
         }
 
         void InitRenderData()
         {
+            Shader.SetGlobalTexture("_InstanceLightMapArray",ConvertToTexture2Darray.Instance.GetLightMapArray());
+            Shader.SetGlobalTexture("_InstanceShadowMaskArray",ConvertToTexture2Darray.Instance.GetShadowMaskArray());
             Shader.SetGlobalVector("instance_SHAr", CoreUtils.ConvertSRGBToActiveColorSpace(RenderSettings.ambientSkyColor));
             Shader.SetGlobalVector("instance_SHAg", CoreUtils.ConvertSRGBToActiveColorSpace(RenderSettings.ambientEquatorColor));
             Shader.SetGlobalVector("instance_SHAb", CoreUtils.ConvertSRGBToActiveColorSpace(RenderSettings.ambientGroundColor));

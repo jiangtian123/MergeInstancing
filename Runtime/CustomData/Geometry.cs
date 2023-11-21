@@ -110,6 +110,39 @@ namespace Unity.MergeInstancingSystem.CustomData
       public static implicit operator DAABB(Bounds Bound) { return new DAABB(Bound.center, Bound.size); }
    }
 
+   public struct DSphere : IEquatable<DSphere>
+   {
+      private float m_Radius;
+      private float3 m_Center;
+
+      public float radius { get { return m_Radius; } set { m_Radius = value; } }
+      public float3 center { get { return m_Center; } set { m_Center = value; } }
+
+
+      public DSphere(float radius, float3 center)
+      {
+         m_Radius = radius;
+         m_Center = center;
+      }
+
+      public override bool Equals(object other)
+      {
+         if (!(other is DSphere)) return false;
+
+         return Equals((DSphere)other);
+      }
+
+      public bool Equals(DSphere other)
+      {
+         return radius.Equals(other.radius) && center.Equals(other.center);
+      }
+
+      public override int GetHashCode()
+      {
+         return radius.GetHashCode() ^ (center.GetHashCode() << 2);
+      }
+   }
+
    public static class Geometry
    {
       
@@ -145,12 +178,12 @@ namespace Unity.MergeInstancingSystem.CustomData
          return math.sqrt((Squared(cameraPos.x - boxPos.x) + Squared(cameraPos.z - boxPos.z)));
       }
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
-      public static bool IntersectAABBFrustum(in DAABB bound,in NativeArray<DPlane> planes,out bool isCompletely)
+      public unsafe static bool IntersectAABBFrustum(in DAABB bound,in DPlane* planes,out bool isCompletely)
       {
          isCompletely = false;
          float3 min = bound.min;
          float3 max = bound.max;
-         float3[] points = new float3[8];
+         NativeArray<float3> points = new NativeArray<float3>(8, Allocator.Temp);
          points[0] = new float3(min.x, min.y, min.z);
          points[1] = new float3(min.x, min.y, max.z);
          points[2] = new float3(max.x, min.y, max.z);
@@ -160,7 +193,7 @@ namespace Unity.MergeInstancingSystem.CustomData
          points[5] = new float3(min.x, max.y, max.z);
          points[6] = new float3(max.x, max.y, max.z);
          points[7] = new float3(max.x, max.y, min.z);
-         for(int p = 0; p < (int)planes.Length; ++p)
+         for(int p = 0; p < 6; ++p)
          {
             bool inside = false;
             for(int c = 0; c < 8; ++c)
@@ -178,9 +211,11 @@ namespace Unity.MergeInstancingSystem.CustomData
             if(!inside)
             {
                isCompletely = true;
+               points.Dispose();
                return false;
             }
          }
+         points.Dispose();
          return true;
       }
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -205,5 +240,26 @@ namespace Unity.MergeInstancingSystem.CustomData
          float relativeHeight = bounds.size.x * preRelative / distance;
          return relativeHeight < cullDistance;
       }
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      public static float DistSquared(in float3 v1, in float3 v2)
+      {
+         return Squared(v2.x - v1.x) + Squared(v2.y - v1.y) + Squared(v2.z - v1.z);
+      }
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      public static float ComputeBoundsScreenRadiusSquared(in float sphereRadius, in float3 boundOrigin, in float3 viewOrigin, in float4x4 projMatrix)
+      {
+         float DistSqr = DistSquared(boundOrigin, viewOrigin) * projMatrix.c2.z;
+
+         float ScreenMultiple = math.max(0.5f * projMatrix.c0.x, 0.5f * projMatrix.c1.y);
+         ScreenMultiple *= sphereRadius;
+
+         return (ScreenMultiple * ScreenMultiple) / math.max(1, DistSqr);
+      }
+      [MethodImpl(MethodImplOptions.AggressiveInlining)]
+      public static float CaculateBoundRadius(in DAABB bound)
+      {
+         return math.max(math.max(math.abs(bound.extents.x), math.abs(bound.extents.y)), math.abs(bound.extents.z));
+      }
+      
    }
 }

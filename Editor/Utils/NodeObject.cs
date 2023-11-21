@@ -23,7 +23,6 @@ namespace Unity.MergeInstancingSystem.Utils
         public Mesh m_mesh;
         public Material m_mat;
         public LightMode m_lightMode;
-        public RendererQueue m_queue;
         public int subMeshIndex;
         public bool m_castShadow;
         public NodeObject(int subMesh,Mesh mesh,Material mat,long identifier,Renderer renderer)
@@ -32,7 +31,6 @@ namespace Unity.MergeInstancingSystem.Utils
             subMeshIndex = subMesh;
             m_castShadow = renderer.shadowCastingMode == ShadowCastingMode.Off ? false : true;
             m_lightMode = (light_mapindex >=0 && light_mapindex < LightmapSettings.lightmaps.Length) ? LightMode.LightMap : LightMode.LightProbe;
-            m_queue = mat.renderQueue > 2500 ? RendererQueue.Transparent : RendererQueue.Opaque;
             m_mat = mat;
             m_mesh = mesh;
             Identifier = identifier;

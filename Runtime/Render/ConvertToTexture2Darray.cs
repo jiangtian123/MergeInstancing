@@ -8,11 +8,33 @@ namespace Unity.MergeInstancingSystem.Render
     {
         private Texture2DArray m_lightMapArray;
         private Texture2DArray m_ShadowMaskArray;
-        private void Start()
+        private static bool isInit = false;
+        private static ConvertToTexture2Darray m_instance;
+
+        public static ConvertToTexture2Darray Instance
+        {
+            get
+            {
+                if (m_instance == null)
+                {
+                    m_instance = FindObjectOfType<ConvertToTexture2Darray>(); 
+                    if (m_instance == null)
+                    {
+                        GameObject singletonObject = new GameObject();
+                        m_instance = singletonObject.AddComponent<ConvertToTexture2Darray>();
+                        singletonObject.name = "ConvertToTexture2Darray";
+                    };
+                    if (!isInit)
+                    {
+                        m_instance.ConvertToTexture2DArray();
+                    }
+                }
+                return m_instance;
+            }
+        }
+        private void Awake()
         {
             ConvertToTexture2DArray();
-            InstanceManager.Instance.RegisterLightMap(m_lightMapArray);
-            InstanceManager.Instance.RegisterShadowMask(m_ShadowMaskArray);
         }
         private void ConvertToTexture2DArray()
         {
@@ -48,18 +70,31 @@ namespace Unity.MergeInstancingSystem.Render
             }
             m_lightMapArray = lightMapArray;
             m_ShadowMaskArray = shadowMaskArray;
+            isInit = true;
         }
 
         private void OnEnable()
         {
             m_lightMapArray = null;
             m_ShadowMaskArray = null;
+            isInit = false;
         }
 
         private void OnDestroy()
         {
+            isInit = false;
             m_lightMapArray = null;
             m_ShadowMaskArray = null;
         }
+
+        public Texture2DArray GetLightMapArray()
+        {
+            return m_lightMapArray;
+        }
+        public Texture2DArray GetShadowMaskArray()
+        {
+            return m_ShadowMaskArray;
+        }
+        
     }
 }

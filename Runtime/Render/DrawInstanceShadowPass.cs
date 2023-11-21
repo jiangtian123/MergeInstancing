@@ -1,4 +1,7 @@
 ﻿using System.Collections.Generic;
+using Unity.Collections;
+using Unity.Jobs;
+using Unity.MergeInstancingSystem.New;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
@@ -12,9 +15,7 @@ namespace Unity.MergeInstancingSystem.Render
     /// </summary>
     public class DrawInstanceShadowPass : ScriptableRenderPass
     {
-        private List<IRendererInstanceInfo> renderData;
         const string Instance_Shadow = "Render Instance Shadow";
-        
         const int k_MaxCascades = 4;
         const int k_ShadowmapBufferBits = 16;
         float m_CascadeBorder;
@@ -25,7 +26,6 @@ namespace Unity.MergeInstancingSystem.Render
         Matrix4x4[] m_MainLightShadowMatrices;
         ShadowSliceData[] m_CascadeSlices;
         Vector4[] m_CascadeSplitDistances;
-        
         bool m_CreateEmptyShadowmap;
         
         private static readonly ProfilingSampler InstanceShadow = new ProfilingSampler(Instance_Shadow);
@@ -37,13 +37,12 @@ namespace Unity.MergeInstancingSystem.Render
             m_CascadeSplitDistances = new Vector4[k_MaxCascades];
         }
 
-        public bool Setup(List<IRendererInstanceInfo> data,ref RenderingData renderingData)
+        public bool Setup(ref RenderingData renderingData)
         {
             using var profScope = new ProfilingScope(null, InstanceShadow);
 
             if (!renderingData.shadowData.supportsMainLightShadows)
                 return SetupForEmptyRendering(ref renderingData);
-            renderData = data;
             Clear();
             // index = -1说明没有光源
             int shadowLightIndex = renderingData.lightData.mainLightIndex;
@@ -93,7 +92,7 @@ namespace Unity.MergeInstancingSystem.Render
         {
             if (!renderingData.cameraData.renderer.stripShadowsOffVariants)
                 return false;
-            ShadowMapTextureManager.Instance.InitializeTexture(renderTargetWidth, renderTargetHeight);
+            ShadowMapTextureManager.Instance.InitializeTexture(1, 1);
             m_instanceLightShadowmapTexture =  ShadowMapTextureManager.Instance.RenderTexture;
             m_CreateEmptyShadowmap = true;
             return true;
@@ -116,10 +115,24 @@ namespace Unity.MergeInstancingSystem.Render
                 SetEmptyMainLightCascadeShadowmap(ref context);
                 return;
             }
-            var cameraData = renderingData.cameraData;
-            var camera = cameraData.camera;
-            if (camera != CameraRecognizerManager.ActiveCamera)
-                return;
+            if (Application.isPlaying == false) { return; }
+            Vector3 viewOrigin = renderingData.cameraData.camera.transform.position;
+            float maxShadowDis = renderingData.cameraData.maxShadowDistance;
+            NativeList<JobHandle> taskHandles = new NativeList<JobHandle>(256, Allocator.Temp);
+            //准备阴影渲染数据
+            for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
+            {
+                ControllerComponent.instanceComponents[i].UpDateTreeWithShadow(viewOrigin,maxShadowDis,taskHandles);
+            }
+            JobHandle.CompleteAll(taskHandles);
+            taskHandles.Clear();
+            for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
+            {
+                ControllerComponent.instanceComponents[i].DispatchSetup(taskHandles,true);
+            }
+            JobHandle.CompleteAll(taskHandles);
+            taskHandles.Clear();
+            taskHandles.Dispose();
             RenderInstanceShadow(ref context, ref renderingData.cullResults, ref renderingData.lightData, ref renderingData.shadowData);
         }
 
@@ -170,7 +183,10 @@ namespace Unity.MergeInstancingSystem.Render
             }
             context.ExecuteCommandBuffer(cmd);
             CommandBufferPool.Release(cmd);
-            
+            for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
+            {
+                ControllerComponent.instanceComponents[i].Reset();
+            }
         }
 
         private bool JudgeDis(float rendererDis)
@@ -192,20 +208,9 @@ namespace Unity.MergeInstancingSystem.Render
             cmd.SetViewProjectionMatrices(view, proj);
             context.ExecuteCommandBuffer(cmd);
             cmd.Clear();
-            foreach (var rendererInstanceInfo in renderData)
+            for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
             {
-                var pool = rendererInstanceInfo.GetMatrix4x4();
-                var poolCountcount = rendererInstanceInfo.GetPoolCount();
-                var mesh = rendererInstanceInfo.GetMesh();
-                var mat = rendererInstanceInfo.GetMaterial();
-                var subMeshIndex = rendererInstanceInfo.GetSubMeshIndex();
-                var matBlocks = rendererInstanceInfo.GetMatpropretyBlock();
-                for (int i = 0; i < poolCountcount; i++)
-                {
-                    var count = pool[i].length;
-                    var matrixs = pool[i].OnePool;
-                    cmd.DrawMeshInstanced(mesh, subMeshIndex, mat, 1, matrixs, count, matBlocks);
-                }
+                ControllerComponent.instanceComponents[i].DispatchDrawShadow(cmd,1);
             }
             cmd.DisableScissorRect();
             context.ExecuteCommandBuffer(cmd);
@@ -218,12 +223,7 @@ namespace Unity.MergeInstancingSystem.Render
         /// <param name="cmd"></param>
         public override void OnCameraCleanup(CommandBuffer cmd)
         {
-            if (renderData == null)
-            {
-                return;
-            }
-
-            renderData = null;
+           
         }
     }
 }

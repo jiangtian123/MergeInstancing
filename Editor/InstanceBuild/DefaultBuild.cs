@@ -4,10 +4,12 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
-using Unity.MergeInstancingSystem;
+using Unity.MergeInstancingSystem.CreateUtils;
+using Unity.MergeInstancingSystem.CustomData;
+using Unity.MergeInstancingSystem.New;
 using Unity.MergeInstancingSystem.SpaceManager;
 using Unity.MergeInstancingSystem.Utils;
-using Unity.MergeInstancingSystem.Controller;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 namespace Unity.MergeInstancingSystem.InstanceBuild
 {
@@ -29,178 +31,412 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             m_streamingOptions = streamingOptions;
             m_controllerID = controllerID;
         }
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="rootNode">场景根节点</param>
-        /// <param name="infos">场景中的Low Obj</param>
-        /// <param name="instanceData"></param>
-        /// <param name="root"></param>
-        /// <param name="cullDistance"></param>
-        /// <param name="lodDistance"></param>
-        /// <param name="writeNoPrefab"></param>
-        /// <param name="extractMaterial"></param>
-        /// <param name="onProgress"></param>
-        public void Build(SpaceNode rootNode,List<InstanceBuildInfo> 
-            info,AllInstanceData instanceData, GameObject root,float cullDistance, float lodDistance, bool writeNoPrefab,bool useMotionvector,bool usePreciseCulling ,bool extractMaterial, Action<float> onProgress)
+        public void Build(SpaceNode rootNode, GameObject root,Instance instance, Action<float> onProgress)
         {
             dynamic options = m_streamingOptions;
             string path = options.OutputDirectory+$"{SceneManager.GetActiveScene().name}";
-            //存按照某种遍历方式展成List的四叉树的容器
-            InstanceTreeNodeContainer container = new InstanceTreeNodeContainer();
-            InstanceTreeNode convertedRootNode = Helper(container,rootNode,0);
-            BatchTreeNode(rootNode,info,instanceData);
-            if (onProgress != null)
-                onProgress(0.0f);
-            InstanceData data = GetInstanceData(instanceData);
-            string filename = $"{path}/{root.name}.asset";
-            //如果需要保存的路径不存在，就创建一个
             if (Directory.Exists(path) == false)
             {
                 Directory.CreateDirectory(path);
             }
-            //FileStream 二进制读写流，这里创建一个新的文件
+            //存按照某种遍历方式展成List的四叉树的容器
+            TreeNodeContainer container = new TreeNodeContainer();
+            TreeNode Root = ConvertNode(container,rootNode);
+            List<InstanceGameObject> instanceGameObjects = new List<InstanceGameObject>();
+
+            var instanceObjs = GetInstanceGameObj(container);
             
-            AssetDatabase.CreateAsset(data, filename);
+            InstanceData instanceData = GetInstanceData(instanceObjs);
+            InstancePrefab[] prefabs = GetInstancePrefab(instanceObjs);
+            InstanceSubSector[] uniqueSubSector = MergeInstanceSubSectors(prefabs);
+            for (int i = 0; i < instanceObjs.Count; i++)
+            {
+                instanceGameObjects.Add(instanceObjs[i].insObj);
+            }
+            CalculateSubsectorRef(instanceGameObjects,prefabs,uniqueSubSector);
+            if (onProgress != null)
+                onProgress(0.0f);
+            //里面存的是instance 渲染用到的真正的数据
+            for (int i = 0; i < prefabs.Length; i++)
+            {
+                m_manager.AddGeneratedResource(prefabs[i]);
+            }
+
+            for (int i = 0; i < uniqueSubSector.Length; i++)
+            {
+                m_manager.AddGeneratedResource(uniqueSubSector[i]);
+            }
+            m_manager.AddGeneratedResource(instanceData);
+            TreeNodeController defaultController = root.AddComponent<TreeNodeController>();
+            m_manager.AddGeneratedResource(defaultController);
+            defaultController.m_cullDistance = instance.CullDistance;
+            defaultController.m_useJob = instance.UseJob;
+            defaultController.m_root = Root;
+            defaultController.m_jobBeginLevel = instance.BeginJobLevel;
+            defaultController.m_useMotionvecter = instance.UseMotionvector;
+            defaultController.m_treeNodeContainer = container;
+            defaultController.m_instanceSector = prefabs;
+            defaultController.m_gameobject = instanceGameObjects.ToArray();
+            defaultController.m_subSectors = uniqueSubSector;
+            defaultController.m_instanceData = instanceData;
+            string subdirectory = $"{path}/{root.name}";
+            //如果需要保存的路径不存在，就创建一个
+            if (Directory.Exists(subdirectory) == false)
+            {
+                Directory.CreateDirectory(subdirectory);
+            }
+            //FileStream 二进制读写流，这里创建一个新的文件
+            string filename = $"{subdirectory}/{root.name}_InstanceData.asset";
+            AssetDatabase.CreateAsset(instanceData, filename);
+            for (int i = 0; i < prefabs.Length; i++)
+            {
+                string tempName = $"{subdirectory}/{root.name}_Prefab{i}.asset";
+                AssetDatabase.CreateAsset(prefabs[i], tempName);
+            }
+            for (int i = 0; i < uniqueSubSector.Length; i++)
+            {
+                string tempName = $"{subdirectory}/{root.name}_SubSector{i}.asset";
+                AssetDatabase.CreateAsset(uniqueSubSector[i], tempName);
+            }
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            //里面存的是instance 渲染用到的真正的数据
-          
-            m_manager.AddGeneratedResource(data);
-            var defaultController = root.AddComponent<DefaultInstanceController>();
-            defaultController.ControllerID = m_controllerID;
-            m_manager.AddGeneratedResource(defaultController);
-            defaultController.InstanceData = data;
-            defaultController.Container = container;
-            defaultController.Root = convertedRootNode;
-            defaultController.CullDistance = cullDistance;
-            defaultController.LODDistance = lodDistance;
-            defaultController.useMotionVector = useMotionvector;
-            defaultController.usePreciseCulling = usePreciseCulling;
         }
-        private InstanceData GetInstanceData(AllInstanceData instanceData)
+        
+        
+        
+        public class TempGameobj
         {
-            InstanceData tempData = new InstanceData();
-            tempData.m_materials = instanceData.Materials;
-            tempData.m_meshs = instanceData.Meshes;
-            tempData.m_renderClass = instanceData.RenderClassStates;
-            tempData.transforms = instanceData.GetMatrix4X4s();
-            tempData.m_LightMapIndexsData = instanceData.GetLightMapIndexs();
-            tempData.m_LightMapOffsetsData = instanceData.GetLigthMapOffests();
-            return tempData;
+            public GameObject obj;
+            public InstanceGameObject insObj;
         }
-        private void BatchTreeNode(SpaceNode node,List<InstanceBuildInfo> infos,AllInstanceData datas)
+
+        private void CalculateSubsectorRef(List<InstanceGameObject> instanceGameObje,InstancePrefab[] prefabs,InstanceSubSector[] subSectors)
         {
-            Queue<SpaceNode> spaceNodes = new Queue<SpaceNode>();
-            Queue<InstanceTreeNode> instanceTreeNodes = new Queue<InstanceTreeNode>();
-            spaceNodes.Enqueue(node);
-            instanceTreeNodes.Enqueue(convertedTable[node]);
-            while (spaceNodes.Count > 0)
+            Dictionary<InstanceSubSector, int> counter = new Dictionary<InstanceSubSector, int>();
+            foreach (var instanceGameObject in instanceGameObje)
             {
-                var spaceNode = spaceNodes.Dequeue();
-                var instanceTreeNode = instanceTreeNodes.Dequeue();
-                if (spaceNode.HasChild())
+                var prefab = prefabs[instanceGameObject.m_prefabIndex];
+                foreach (var instanceSector in prefab.m_lod)
                 {
-                    for (int i = 0; i < spaceNode.GetChildCount(); ++i)
+                    foreach (var instanceSubSector in instanceSector.m_subSectors)
                     {
-                        spaceNodes.Enqueue(spaceNode.GetChild(i));
-                        instanceTreeNodes.Enqueue(convertedTable[spaceNode.GetChild(i)]);
+                        if (counter.TryGetValue(instanceSubSector,out var number))
+                        {
+                            counter[instanceSubSector] = number + 1;
+                        }
+                        else
+                        {
+                            counter.Add(instanceSubSector,1);
+                        }
                     }
                 }
-                //处理每个节点
-                var highNodeclassificationObject = spaceNode.classificationObjects;
-                var highObj =  GetNodeData(highNodeclassificationObject,datas);
-                instanceTreeNode.HighObjects = highObj;
             }
 
-            foreach (var info in infos)
+            foreach (var instanceSubSector in subSectors)
             {
-                var instanceTreeNode = convertedTable[info.Target];
-                var LowNodeclassificationObject = info.classificationObjects;
-                var lowObject =  GetNodeData(LowNodeclassificationObject,datas);
-                instanceTreeNode.LowObjects = lowObject;
-                instanceTreeNode.LowCullBounds = info.CalculateRealBound();
+                instanceSubSector.sectionCount = counter[instanceSubSector];
             }
         }
-        /// <summary>
-        /// 从分类好的OBJ中构建NodeData，按照Mesh和材质分类
-        /// </summary>
-        /// <param name="classificationObjects"></param>
-        /// <param name="datas"></param>
-        /// <returns></returns>
-        private List<NodeData> GetNodeData(Dictionary<long, NodeObject> classificationObjects,AllInstanceData datas)
+        private List<TempGameobj> GetInstanceGameObj(TreeNodeContainer treeList)
         {
-            List<NodeData> result = new List<NodeData>();
-            foreach (var nodePair in classificationObjects)
+            Dictionary<int, InstanceSubSector> subSectors = new Dictionary<int, InstanceSubSector>();
+            List<TempGameobj> instanceTargets = new List<TempGameobj>();
+            
+            for (int i = 0; i < treeList.Count; i++)
             {
-                List<int> minGameObjectsIndex = new List<int>();
-                //每种类型（材质加mesh）下的OBJList
-                var nodelist = nodePair.Value;
-                int meshIndex = datas.GetAssetIndex(nodePair.Value.m_mesh);
-                if (meshIndex == -1)
+                var treeNode = treeList.Get(i);
+                SpaceNode spaceNode = convertedTable[treeNode];
+                treeNode.m_Gameobj.head = instanceTargets.Count;
+                for (int j = 0; j < spaceNode.Objects.Count; j++)
                 {
-                    Debug.Log("index = -1");
+                    //这个gameobj是预制体的父物体，其下有lod
+                    GameObject gameObject = spaceNode.Objects[j];
+                    InstanceGameObject instanceGameObject = new InstanceGameObject();
+                    TempGameobj a = new TempGameobj();
+                    a.obj = gameObject;
+                    a.insObj = instanceGameObject;
+                    instanceTargets.Add(a);
                 }
-                int matIndex = datas.GetAssetIndex(nodePair.Value.m_mat);
-                int subMesh = nodePair.Value.subMeshIndex;
-                bool needLighMap = nodePair.Value.m_lightMode == LightMode.LightMap;
-                //收集所有的矩阵信息
-                foreach (var nodeObject in nodelist.m_gameobjs)
-                {
-                    int index = datas.GetAssetIndex(nodeObject);
-                    minGameObjectsIndex.Add(index);
-                }
-                minGameObjectsIndex.Sort();
-                var matrixs = minGameObjectsIndex.SplitArrayIntoConsecutiveSubArrays((a, b) =>
-                {
-                    if (a == b+1)
-                    {
-                        return true;
-                    }
-                    else
-                    {
-                        return false;
-                    }
-                });
-                // ----------------------------------- 
-                NodeData tempNodteData = new NodeData();
-                tempNodteData.m_RenderData = matrixs;
-                tempNodteData.m_material = matIndex;
-                tempNodteData.m_meshIndex = meshIndex;
-                tempNodteData.subMeshIndex = subMesh;
-                tempNodteData.m_castShadow = nodePair.Value.m_castShadow;
-                tempNodteData.m_queue = nodePair.Value.m_queue;
-                tempNodteData.m_identifier = nodePair.Value.Identifier;
-                tempNodteData.m_NeedLightMap = needLighMap;
-                result.Add(tempNodteData);
+                treeNode.m_Gameobj.number = spaceNode.Objects.Count;
             }
-
+            return instanceTargets;
            
+        }
+
+        private InstanceData GetInstanceData( List<TempGameobj> instanceTargets)
+        {
+            InstanceData result = new InstanceData();
+            List<SerializableData> m_gameObjectData = new List<SerializableData>();
+            for (int i = 0; i < instanceTargets.Count; i++)
+            {
+                var tempObj = instanceTargets[i];
+                tempObj.insObj.m_dataIndex = i;
+                var data = GetSerializableData(tempObj.obj);
+                m_gameObjectData.Add(data);
+            }
+
+            result.m_gameObjectData = m_gameObjectData;
             return result;
         }
-        Dictionary<SpaceNode, InstanceTreeNode> convertedTable = new Dictionary<SpaceNode, InstanceTreeNode>();
-        
-        public int CountSubtrees(SpaceNode root)
+
+        private SerializableData GetSerializableData(GameObject gameObject)
         {
-            int count = 1; // 包括当前节点本身的数量
-            for (int i = 0; i < root.GetChildCount(); i++)
+            SerializableData result = new SerializableData();
+            //放每层Lod下的Meshrenderer
+            List<List<MeshRenderer>> tempMeshrenderer = new List<List<MeshRenderer>>();
+
+            List<LodSerializableData> tempLodData = new List<LodSerializableData>();
+            //按照Lod级别拿的MeshRender
+            int maxLod = 1;
+            //获取最大的Lod级别
+            var lodGroup = gameObject.GetComponent<LODGroup>();
+            if (lodGroup != null)
             {
-                count += CountSubtrees(root.GetChild(i));
+                maxLod = lodGroup.GetLODs().Length;
             }
-            return count;
+            for (int i = 0; i < maxLod; i++)
+            {
+                List<MeshRenderer> a = new List<MeshRenderer>();
+                tempMeshrenderer.Add(a);
+            }
+            for (int j = 0; j < maxLod; j++)
+            {
+                tempMeshrenderer[j].AddRange(GetMeshRenderer.GetMeshRenderers(gameObject,0.01f,j,true));
+            }
+            //每个meshRenderers 是一种lod下的所有meshrenderer
+            foreach (var meshRenderers in tempMeshrenderer)
+            {
+                List<DTransform> localToworld = new List<DTransform>();
+                List<float> lightmapIndex = new List<float>();
+                List<Vector4> lisghtmapOffest = new List<Vector4>();
+                foreach (var meshRenderer in meshRenderers)
+                {
+                    localToworld.Add(new DTransform(meshRenderer.transform.position,meshRenderer.transform.rotation,meshRenderer.transform.lossyScale));
+                    var light_mapindex = meshRenderer.lightmapIndex;
+                    if (light_mapindex >= 0 && light_mapindex < LightmapSettings.lightmaps.Length)
+                    {
+                        lightmapIndex.Add((float)light_mapindex);
+                        lisghtmapOffest.Add(meshRenderer.lightmapScaleOffset);
+                    }
+                }
+
+                LodSerializableData temp = new LodSerializableData();
+                temp.transforms = localToworld.ToArray();
+                temp.lightmapIndex = lightmapIndex.ToArray();
+                temp.lightmapOffest = lisghtmapOffest.ToArray();
+                tempLodData.Add(temp);
+            }
+            result.m_LodData = tempLodData.ToArray();
+            return result;
         }
+
+
+        private InstancePrefab[] GetInstancePrefab(List<TempGameobj> instanceTargets)
+        {
+            List<InstancePrefab> result = new List<InstancePrefab>();
+            Dictionary<string, int> tempInstancePrefabs = new Dictionary<string, int>();
+            //收集所有的prefab
+            foreach (var tempGameobj in instanceTargets)
+            {
+                var gameobj = tempGameobj.obj;
+                string prefabGUID = GetObjectGUID(gameobj);
+                if (prefabGUID == "")
+                {
+                    continue;
+                }
+                if (!tempInstancePrefabs.ContainsKey(prefabGUID))
+                {
+                    result.Add(GetInstancePrefab(gameobj));
+                    tempInstancePrefabs.Add(prefabGUID, result.Count - 1);
+                }
+            }
+
+            foreach (var tempGameobj in instanceTargets)
+            {
+                var gameobj = tempGameobj.obj;
+                string prefabGUID = GetObjectGUID(gameobj);
+                if (prefabGUID == "")
+                {
+                    continue;
+                }
+                tempGameobj.insObj.m_prefabIndex = tempInstancePrefabs[prefabGUID];
+            }
+            return result.ToArray();
+        }
+            
+
+        public InstancePrefab GetInstancePrefab(GameObject gameObject)
+        {
+            InstancePrefab result = new InstancePrefab();
+            List<MeshRenderer> meshRenderers = new List<MeshRenderer>();
+            var lodGroup = gameObject.GetComponent<LODGroup>();
+            meshRenderers.AddRange(gameObject.GetComponentsInChildren<MeshRenderer>());
+            RemoveDisabled(meshRenderers);
+            if (lodGroup != null)
+            {
+                LOD[] lods = lodGroup.GetLODs();
+                Renderer[] lodRenderers = lods[0].renderers;
+                Bounds bounds = lodRenderers[0].localBounds;
+                for (int i = 1; i < lodRenderers.Length; i++)
+                {
+                    Bounds tempbox = lodRenderers[i].localBounds;
+                    bounds.Encapsulate(tempbox);
+                }
+
+                result.m_box = bounds;
+                List<InstanceSector> sectors = new List<InstanceSector>();
+                List<float> lodInfos = new List<float>();
+                for (int i = 0; i < lods.Length; i++)
+                {
+                    LOD lod = lods[i];
+                    sectors.Add(GetInstanceSector(lod));
+                    lodInfos.Add(lod.screenRelativeTransitionHeight);
+                }
+                result.m_lod = sectors.ToArray();
+                result.m_LODInfos = lodInfos;
+                return result;
+            }
+            else
+            {
+                List<InstanceSector> sectors = new List<InstanceSector>();
+                List<float> lodInfos = new List<float>();
+                sectors.Add(GetInstanceSector(meshRenderers,gameObject));
+                lodInfos.Add(1);
+                Bounds bounds = meshRenderers[0].localBounds;
+                for (int i = 1; i < meshRenderers.Count; i++)
+                {
+                    Bounds tempbox = meshRenderers[i].localBounds;
+                    bounds.Encapsulate(tempbox);
+                }
+                result.m_box = bounds;
+                result.m_LODInfos = lodInfos;
+                result.m_lod = sectors.ToArray();
+                return result;
+            }
+        }
+
+        private InstanceSector GetInstanceSector(LOD lod)
+        {
+            InstanceSector result = new InstanceSector();
+            var renders = lod.renderers;
+            List<Matrix4x4> tempMatrix = new List<Matrix4x4>();
+            List<InstanceSubSector> subSectors = new List<InstanceSubSector>();
+            foreach (var mRender in renders)
+            {
+                tempMatrix.Add(Matrix4x4.TRS(mRender.transform.localPosition,mRender.transform.localRotation,mRender.transform.localScale));
+                subSectors.Add(GetInstanceSubSector(mRender));
+            }
+
+            result.m_subSectors = subSectors.ToArray();
+            return result;
+        }
+        private InstanceSector GetInstanceSector(List<MeshRenderer> meshRenderers,GameObject root)
+        {
+            InstanceSector result = new InstanceSector();
+            List<InstanceSubSector> subSectors = new List<InstanceSubSector>();
+            foreach (var mRender in meshRenderers)
+            {
+                subSectors.Add(GetInstanceSubSector(mRender));
+            }
+            result.m_subSectors = subSectors.ToArray();
+            return result;
+        }
+        
+        private InstanceSubSector GetInstanceSubSector(Renderer renderer)
+        {
+            InstanceSubSector result = new InstanceSubSector();
+            var mesh = renderer.gameObject.GetComponent<MeshFilter>().sharedMesh;
+            var mats = renderer.sharedMaterials;
+            List<int> subMeshIndex = new List<int>();
+            for (int i = 0; i < mesh.subMeshCount; i++)
+            {
+                subMeshIndex.Add(i);
+            }
+            result.sectionCount = 0;
+            result.m_subMeshIndex = subMeshIndex.ToArray();
+            result.m_mesh = mesh;
+            result.materials = mats;
+            result.m_Renderqueue = (RenderQueue)mats[0].renderQueue;
+            result.m_castShadow = renderer.shadowCastingMode == ShadowCastingMode.On;
+            return result;
+        }
+        private static string GetObjectGUID(GameObject gameObject)
+        {
+            PrefabAssetType prefabAssetType = PrefabUtility.GetPrefabAssetType(gameObject);
+            if (prefabAssetType == PrefabAssetType.Regular || prefabAssetType == PrefabAssetType.Variant)
+            {
+                UnityEngine.Object prefabObject = PrefabUtility.GetCorrespondingObjectFromSource(gameObject);
+                string prefabGUID = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(prefabObject));
+                return prefabGUID;
+            }
+            else
+            {
+                return "";
+            }
+        }
+
+        private InstanceSubSector[] MergeInstanceSubSectors(InstancePrefab[] prefabs)
+        {
+            HashSet<InstanceSubSector> unique = new HashSet<InstanceSubSector>();
+            for (int i = 0; i < prefabs.Length; i++)
+            {
+                var lods = prefabs[i].m_lod;
+                foreach (var instanceSector in lods)
+                {
+                    foreach (var instanceSubSector in instanceSector.m_subSectors)
+                    {
+                        unique.Add(instanceSubSector);
+                    }
+                }
+            }
+            List<InstanceSubSector> array = new List<InstanceSubSector>(unique);
+            for (int i = 0; i < prefabs.Length; i++)
+            {
+                var lods = prefabs[i].m_lod;
+                foreach (var instanceSector in lods)
+                {
+                    List<int> subSectorIndex = new List<int>();
+                    for (int j = 0; j < instanceSector.m_subSectors.Length; j++)
+                    {
+                        var instanceSubSector = instanceSector.m_subSectors[j];
+                        int index = array.IndexOf(instanceSubSector);
+                        subSectorIndex.Add(index);
+                    }
+                    instanceSector.m_meshs = subSectorIndex.ToArray();
+                }
+            }
+            return array.ToArray();
+        }
+
+        Dictionary<TreeNode,SpaceNode> convertedTable = new Dictionary<TreeNode,SpaceNode>();
+        private void RemoveDisabled(List<MeshRenderer> componentList)
+        {
+            for (int i = 0; i < componentList.Count; ++i)
+            {
+                if (componentList[i].enabled == true && componentList[i].gameObject.activeInHierarchy == true)
+                {
+                    continue;
+                }
+
+                int backIndex = componentList.Count - 1;
+                componentList[i] = componentList[backIndex];
+                componentList.RemoveAt(backIndex);
+                i -= 1;
+            }
+        }
+        
         /// <summary>
         /// 这个地方按照 子节点父节点的方式展开树。
         /// </summary>
         /// <param name="container"></param>
         /// <param name="rootNode"></param>
         /// <returns></returns>
-        private InstanceTreeNode ConvertNode(InstanceTreeNodeContainer container, SpaceNode rootNode)
+        private TreeNode ConvertNode(TreeNodeContainer container, SpaceNode rootNode)
         {
-            InstanceTreeNode root = new InstanceTreeNode();
+            TreeNode root = new TreeNode();
             root.SetContainer(container);
-            
-            Queue<InstanceTreeNode> instanceTreeNodes = new Queue<InstanceTreeNode>();
+            container.Add(root);
+            Queue<TreeNode> instanceTreeNodes = new Queue<TreeNode>();
             Queue<SpaceNode> spaceNodes = new Queue<SpaceNode>();
             Queue<int> levels = new Queue<int>();
             
@@ -213,17 +449,17 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
                 var spaceNode = spaceNodes.Dequeue();
                 int level = levels.Dequeue();
 
-                convertedTable[spaceNode] = instanceTreeNode;
-                instanceTreeNode.Level = level;
-                instanceTreeNode.Bounds = spaceNode.Bounds;
-                instanceTreeNode.HighCullBounds = spaceNode.CalculateRealBound();
+                convertedTable[instanceTreeNode] = spaceNode;
+                instanceTreeNode.m_level = level;
+                instanceTreeNode.m_Box = spaceNode.Bounds;
+                instanceTreeNode.hasChild = spaceNode.HasChild();
                 if (spaceNode.HasChild())
                 {
                     //存放一个和一个节点子孩子数量相同的TreeNode
-                    List<InstanceTreeNode> childTreeNodes = new List<InstanceTreeNode>(spaceNode.GetChildCount());
+                    List<TreeNode> childTreeNodes = new List<TreeNode>(spaceNode.GetChildCount());
                     for (int i = 0; i < spaceNode.GetChildCount(); ++i)
                     {
-                        var treeNode = new InstanceTreeNode();
+                        var treeNode = new TreeNode();
                         treeNode.SetContainer(container);
                         childTreeNodes.Add(treeNode);
 
@@ -235,21 +471,6 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
                 }
             }
             
-            return root;
-        }
-
-        private InstanceTreeNode Helper(InstanceTreeNodeContainer container, SpaceNode rootNode,int level)
-        {
-            InstanceTreeNode root = new InstanceTreeNode();
-            convertedTable[rootNode] = root;
-            root.Level = level;
-            root.Bounds = rootNode.Bounds;
-            root.SetContainer(container);
-            root.HighCullBounds = rootNode.CalculateRealBound();
-            for (int i = 0; i < rootNode.GetChildCount(); i++)
-            {
-                root.SetChildTreeNode(Helper(container,rootNode.GetChild(i),level+1));
-            }
             return root;
         }
         public static void OnGUI(SerializableDynamicObject buildingOptions)
@@ -289,6 +510,4 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             EditorGUILayout.EndHorizontal();
         }
     }
-    
-    
 }

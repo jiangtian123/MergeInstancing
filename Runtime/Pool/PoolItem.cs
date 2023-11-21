@@ -35,7 +35,7 @@ namespace Unity.MergeInstancingSystem.Pool
     /// <summary>
     /// 申请一种类型的常驻内存的连续数组
     /// </summary>
-    public class PoolItem<T> :BasePool
+    public class PoolItem<T> where T: unmanaged 
     {
         /// <summary>
         /// 一个buffer最大的容积就是1000
@@ -120,9 +120,21 @@ namespace Unity.MergeInstancingSystem.Pool
             }
         }
 
-        public object GetArray()
+        public List<Pool<T>> GetArray()
         {
             return m_item;
+        }
+        
+        public void Add(T element)
+        {
+            if (m_item[m_Index].IsFull)
+            {
+                Expande();
+                m_Index += 1;
+            }
+            var pool = m_item[m_Index];
+            pool.OnePool[pool.length] = element;
+            pool.length += 1;
         }
         /// <summary>
         /// 拷贝多数元素
@@ -130,9 +142,9 @@ namespace Unity.MergeInstancingSystem.Pool
         /// <param name="source">原数组</param>
         /// <param name="head">原数组的开头</param>
         /// <param name="length">要拷贝的长度</param>
-        public void CopyToArray(object source,int head,int length)
+        public void CopyToArray(T[] source,int head,int length)
         {
-            var so = (T[])source;
+            var so = source;
             //
             int paramHead = 0;
             var meshCount = length;

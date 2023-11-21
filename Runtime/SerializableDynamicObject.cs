@@ -4,12 +4,10 @@ using System.Dynamic;
 using UnityEngine;
 namespace Unity.MergeInstancingSystem
 {
-    /// <summary>
-    /// 动态类型，且序列化时会触发一些回调
-    /// </summary>
     [Serializable]
-    public class SerializableDynamicObject: DynamicObject, ISerializationCallbackReceiver
+    public class SerializableDynamicObject : DynamicObject, ISerializationCallbackReceiver
     {
+
         interface ISerializeItem
         {
             void SetName(string name);
@@ -21,16 +19,15 @@ namespace Unity.MergeInstancingSystem
         [Serializable]
         class SerializeItem<T> : ISerializeItem
         {
-            [SerializeField]
-            public string Name;
-            [SerializeField]
-            public T Data;
+            [SerializeField] public string Name;
+            [SerializeField] public T Data;
 
 
             public void SetName(string name)
             {
                 Name = name;
             }
+
             public string GetName()
             {
                 return Name;
@@ -41,6 +38,7 @@ namespace Unity.MergeInstancingSystem
             {
                 Data = data;
             }
+
             public object GetData()
             {
                 return Data;
@@ -50,22 +48,16 @@ namespace Unity.MergeInstancingSystem
         [Serializable]
         class JsonSerializedData
         {
-            [SerializeField]
-            public string Type;
-            [SerializeField]
-            public string Data;
+            [SerializeField] public string Type;
+            [SerializeField] public string Data;
         }
-        /// <summary>
-        /// 序列化的元素队列
-        /// </summary>
 
-        [SerializeField]
-        private List<JsonSerializedData> m_SerializeItems = new List<JsonSerializedData>();
+        [SerializeField] private List<JsonSerializedData> m_SerializeItems = new List<JsonSerializedData>();
 
         private Dictionary<string, object> m_DynamicContext = new Dictionary<string, object>();
 
         public bool ContainsKey(string key)
-        {            
+        {
             return m_DynamicContext.ContainsKey(key);
         }
 
@@ -93,12 +85,12 @@ namespace Unity.MergeInstancingSystem
 
             return true;
         }
-        
+
 
         public void OnBeforeSerialize()
         {
             m_SerializeItems.Clear();
-                
+
             foreach (var pair in m_DynamicContext)
             {
                 if (pair.Value == null)
@@ -112,7 +104,7 @@ namespace Unity.MergeInstancingSystem
                     continue;
 
                 var methodInfo = constructedClass.GetMethod("SetData");
-                methodInfo.Invoke(item, new object[]{pair.Value});
+                methodInfo.Invoke(item, new object[] { pair.Value });
 
                 item.SetName(pair.Key);
 

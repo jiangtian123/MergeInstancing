@@ -15,7 +15,6 @@ namespace Unity.MergeInstancingSystem.Utils
 
         private List<Mesh> m_meshs = new List<Mesh>();
         private List<Material> m_materials = new List<Material>();
-        private List<RenderClassState> m_renderClass = new List<RenderClassState>();
         private List<MinGameObject> m_minGameObjects = new List<MinGameObject>();
 
         #endregion
@@ -31,19 +30,6 @@ namespace Unity.MergeInstancingSystem.Utils
             var mat = nodeObject.m_mat;
             m_materials.AddLikeHashSet(mat);
             var identifier = nodeObject.Identifier;
-            RenderClassState renderClassState = new RenderClassState(identifier,nodeObject.m_gameobjs.Count,useLightMap);
-            int index = m_renderClass.IndexOf(renderClassState);
-            if (index!=-1)
-            {
-                var renderClass = m_renderClass[index];
-                int count = renderClass.m_citations;
-                count += renderClassState.m_citations;
-                renderClass.m_citations = count;
-            }
-            else
-            {
-                m_renderClass.Add(renderClassState);
-            }
             AddDataWithLightMap(nodeObject);
         }
 
@@ -121,13 +107,6 @@ namespace Unity.MergeInstancingSystem.Utils
                 temp.Add((Vector4)m_minGameObjects[i].m_lightMapOffest);
             }
             return temp.ToArray();
-        }
-        public List<RenderClassState> RenderClassStates
-        {
-            get
-            {
-                return m_renderClass;
-            }
         }
         #endregion
         

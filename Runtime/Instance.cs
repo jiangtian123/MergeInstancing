@@ -1,9 +1,10 @@
-﻿using System;
+﻿﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 using Object = UnityEngine.Object;
-using Unity.MergeInstancingSystem.Controller;
-namespace Unity.MergeInstancingSystem
+ using Unity.MergeInstancingSystem.New;
+
+ namespace Unity.MergeInstancingSystem
 {
     public class Instance:MonoBehaviour, ISerializationCallbackReceiver,IGeneratedResourceManager
     {
@@ -26,6 +27,12 @@ namespace Unity.MergeInstancingSystem
         
         [SerializeField]
         private float m_MinObjectSize = 0.0f;
+
+        [SerializeField] 
+        private bool m_useJob = true;
+
+        [SerializeField] 
+        private int m_beginJobLevel = 1;
         //----------------- 接口 --------------------------------------------
         [SerializeField]
         private string m_SpaceSplitterTypeStr;
@@ -101,8 +108,30 @@ namespace Unity.MergeInstancingSystem
             set { m_CullDistance = value; }
             get { return m_CullDistance; }
         }
-        
-        
+
+        public bool UseJob
+        {
+            set
+            {
+                m_useJob = value;
+            }
+            get
+            {
+                return m_useJob;
+            }
+        }
+
+        public int BeginJobLevel
+        {
+            set
+            {
+                m_beginJobLevel = value;
+            }
+            get
+            {
+                return m_beginJobLevel;
+            }
+        }
         public Type SpaceSplitterType
         {
             set { m_SpaceSplitterType = value; }
@@ -211,13 +240,13 @@ namespace Unity.MergeInstancingSystem
         /// 找到HLOD所有ControerBase
         /// </summary>
         /// <returns></returns>
-        public List<InstanceControllerBase> GetInstanceControllerBase()
+        public List<ControllerComponent> GetInstanceControllerBase()
         {
-            List<InstanceControllerBase> controllerBases = new List<InstanceControllerBase>();
+            List<ControllerComponent> controllerBases = new List<ControllerComponent>();
 
             foreach (Object obj in m_generatedObjects)
             {
-                var controllerBase = obj as InstanceControllerBase;
+                var controllerBase = obj as ControllerComponent;
                 if ( controllerBase != null )
                     controllerBases.Add(controllerBase);
             }
@@ -226,7 +255,7 @@ namespace Unity.MergeInstancingSystem
             //so adding controller base manually.
             if (controllerBases.Count == 0)
             {
-                var controller = GetComponent<InstanceControllerBase>();
+                var controller = GetComponent<ControllerComponent>();
                 if (controller != null)
                 {
                     controllerBases.Add(controller);
