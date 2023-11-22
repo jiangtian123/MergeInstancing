@@ -29,7 +29,7 @@ namespace Unity.MergeInstancingSystem.New
         protected abstract void UnRegiste();
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public abstract void UpDateTreeWithShadow(float3 cameraPos,float maxshadowDis,in NativeList<JobHandle> taskHandles);
+        public abstract void UpDateTreeWithShadow(in DPlane* planes,in NativeList<JobHandle> taskHandles);
         
         
 

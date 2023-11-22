@@ -75,6 +75,7 @@ namespace Unity.MergeInstancingSystem.New
                         propertyBlock.Clear();
                         propertyBlock.SetFloatArray("_lightMapIndex", lightmapIndex);
                         propertyBlock.SetVectorArray("_LightScaleOffset", ligtmapOffest);
+                        material.shaderKeywords = null;
                         material.EnableKeyword("CUSTOM_LIGHTMAP_ON");
                         material.EnableKeyword("CUSTOM_INSTANCING_ON");
                         cmdBuffer.DrawMeshInstanced(m_mesh, m_subMeshIndex[i], material, passIndex, matrixs, count,
@@ -94,6 +95,7 @@ namespace Unity.MergeInstancingSystem.New
                     {
                         Material material = materials[m_subMeshIndex[i]];
                         propertyBlock.Clear();
+                        material.shaderKeywords = null;
                         material.EnableKeyword("CUSTOM_INSTANCING_ON");
                         cmdBuffer.DrawMeshInstanced(m_mesh, m_subMeshIndex[i], material, passIndex, matrixs, count,
                             propertyBlock);

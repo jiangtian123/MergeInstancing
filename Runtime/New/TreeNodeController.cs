@@ -163,7 +163,7 @@ namespace Unity.MergeInstancingSystem.New
             {
                 NativeArray<float> lodinfo = m_instanceSector[i].m_LODInfos.ToNativeArray(Allocator.Persistent);
                 m_lodInfos.Add(lodinfo);
-                m_lodNumber[i] = lodinfo.Length - 1;
+                m_lodNumber[i] = lodinfo.Length;
                 m_lodPtr[i] = ((IntPtr)lodinfo.GetUnsafePtr());
             }
         }
@@ -193,16 +193,11 @@ namespace Unity.MergeInstancingSystem.New
         #region Renderering
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public override void UpDateTreeWithShadow(float3 cameraPos,float maxshadowDis,in NativeList<JobHandle> taskHandles)
+        public override void UpDateTreeWithShadow(in DPlane* planes,in NativeList<JobHandle> taskHandles)
         {
             if(!m_castShadow)return;
             ShadowCull.Begin();
-            TreeNodeUpdateShadowJob treeNodeUpdateShadowJob = new TreeNodeUpdateShadowJob();
-            treeNodeUpdateShadowJob.maxShadowDis = maxshadowDis*0.4f;
-            treeNodeUpdateShadowJob.cameraPos = cameraPos;
-            treeNodeUpdateShadowJob.gameobject = (DElement*)m_instanceEle.GetUnsafePtr();
-            treeNodeUpdateShadowJob.lodNumbers = m_lodNumber;
-            taskHandles.Add(treeNodeUpdateShadowJob.Schedule(m_instanceEle.Length,128));
+            m_root.UpdateWithShadow(taskHandles, 0, planes);
             ShadowCull.End();
         }
         

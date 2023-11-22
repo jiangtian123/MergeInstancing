@@ -39,6 +39,11 @@ namespace Unity.MergeInstancingSystem.New
                 Debug.Log("has error on DispatchSetup");
                 return;
             }
+
+            if (lodLevel == -1)
+            {
+                return;
+            }
             var sector = m_lod[lodLevel];
             var lodSerializable = serializableData.m_LodData[lodLevel];
             int number = 0;

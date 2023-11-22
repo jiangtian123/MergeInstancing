@@ -17,7 +17,6 @@ namespace Unity.MergeInstancingSystem.Render
         RenderTargetIdentifier m_CameraRenderTardent;
         RenderTargetIdentifier[] motionMRT;
         bool isUseMotionVectors;
-        private LayerMask layer;
         const string k_NoMotionVectorInstanceTag = "Render Instance No MotionVectors";
         const string k_HaveMotionVectorInstanceTag = "Render Instance Have MotionVectors";
         private static readonly ProfilingSampler m_ProfilingRenderInstanceNoMotionVectors = new ProfilingSampler(k_NoMotionVectorInstanceTag);
@@ -31,11 +30,10 @@ namespace Unity.MergeInstancingSystem.Render
             renderPassEvent = evt;
             motionMRT = new RenderTargetIdentifier[2];
         }
-        public void Setup(bool useMotion, LayerMask layer,RenderQueue renderQueue)
+        public void Setup(bool useMotion, RenderQueue renderQueue)
         {
             m_renderqueue = renderQueue;
             isUseMotionVectors = useMotion;
-            this.layer = layer;
         }
         public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
         {
@@ -106,43 +104,6 @@ namespace Unity.MergeInstancingSystem.Render
             {
                 ControllerComponent.instanceComponents[i].Reset();
             }
-        }
-        void RenderWithMotionVectors(CommandBuffer cmd, RenderingData data, Camera camera, CameraData cameraData)
-        {
-            // motionMRT[0] = m_CameraRenderTardent;
-            // motionMRT[1] =  MotionVectorTexManager.instance.GetRenderTex().Identifier();
-            // cmd.SetRenderTarget(motionMRT, motionMRT[1], 0, CubemapFace.Unknown, -1);
-            // var time = lastTime;
-            // Vector4 lastTimeVector = time * new Vector4(1f / 20f, 1f, 2f, 3f);
-            // foreach (var rendererInstanceInfo in renderData)
-            // {
-            //     var matrix4x4pool = rendererInstanceInfo.GetMatrix4x4();
-            //     var poolCountcount = rendererInstanceInfo.GetPoolCount();
-            //     var mesh = rendererInstanceInfo.GetMesh();
-            //     var mat = rendererInstanceInfo.GetMaterial();
-            //     var subMeshIndex = rendererInstanceInfo.GetSubMeshIndex();
-            //     var matBlocks = rendererInstanceInfo.GetMatpropretyBlock();
-            //     var useLightMap = rendererInstanceInfo.UseLightMapOrProbe;
-            //     mat.EnableKeyword("CUSTOM_INSTANCING_ON");
-            //     mat.EnableKeyword("_USEMOTIONVECTOR");
-            //     mat.SetVector("_LastFrameTime", lastTimeVector);
-            //     for (int i = 0; i < poolCountcount; i++)
-            //     {
-            //         matBlocks.Clear();
-            //         if (useLightMap)
-            //         {
-            //             var lightMapIndexpool = rendererInstanceInfo.GetlightMapIndex();
-            //             var lightScalOffsetpool = rendererInstanceInfo.GetlightMapScaleOffset();
-            //             mat.EnableKeyword("CUSTOM_LIGHTMAP_ON");
-            //             matBlocks.SetFloatArray("_lightMapIndex", lightMapIndexpool[i].OnePool);
-            //             matBlocks.SetVectorArray("_LightScaleOffset", lightScalOffsetpool[i].OnePool);
-            //         }
-            //         var count = matrix4x4pool[i].length;
-            //         var matrixs = matrix4x4pool[i].OnePool;
-            //         cmd.DrawMeshInstanced(mesh, subMeshIndex, mat, 0, matrixs, count, matBlocks);
-            //     }
-            // }
-            // lastTime = Time.time;
         }
         public override void OnCameraCleanup(CommandBuffer cmd)
         {

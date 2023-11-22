@@ -14,24 +14,84 @@ using UnityEngine.Profiling;
 namespace Unity.MergeInstancingSystem
 {
 
-    [BurstCompile]
-    public unsafe struct TreeNodeUpdateShadowJob : IJobParallelFor
+   // [BurstCompile]
+    public unsafe struct TreeNodeUpdateShadowJob : IJob
     {
+        [ReadOnly] 
         [NativeDisableUnsafePtrRestriction]
-        public DElement* gameobject;
-        public float3 cameraPos;
-        public float maxShadowDis;
-        [ReadOnly]
+        public JobTreeData* treeNodes;
+
+        [Collections.ReadOnly] 
+        [NativeDisableUnsafePtrRestriction]
+        public DPlane* planes;
+        
+        
+        [NativeDisableUnsafePtrRestriction]
+        public DElement* instanceElements;
+        
+        [ReadOnly] 
         public NativeArray<int> lodNumbers;
-        public void Execute(int index)
+        
+        public int root;
+        public void Execute()
         {
-            ref DElement ele = ref gameobject[index];
-            float dis = Geometry.GetDistance(cameraPos, ele.m_bounds.center);
-            ele.m_visible = dis < maxShadowDis;
-            ele.m_lodLevel = lodNumbers[ele.m_mark];
+            NativeQueue<int> spaceNodes = new NativeQueue<int>(Allocator.Temp);
+            spaceNodes.Enqueue(root);
+            while (spaceNodes.Count > 0)
+            {
+                int index = spaceNodes.Dequeue();
+                ref JobTreeData node = ref treeNodes[index];
+                ref var box = ref node.m_box;
+                //根据距离剔除是否通过
+                int visible = 1;
+                float2 distRadius = new float2(0, 0);
+                for (int planeIndex = 0; planeIndex < 6; ++planeIndex)
+                {
+                    ref DPlane plane = ref planes[planeIndex];
+                    distRadius.x = math.dot(plane.normalDist.xyz, box.center) + plane.normalDist.w;
+                    distRadius.y = math.dot(math.abs(plane.normalDist.xyz), box.extents);
+                    visible = math.select(visible,0,  distRadius.x + distRadius.y < 0);
+                }
+                //视锥体剔除是否通过
+                bool viewCull = visible == 1;
+                if (viewCull)
+                {
+                    for (int i = node.objhead; i < node.objlength + node.objhead; i++)
+                    {
+                        GameObjCull(instanceElements,i,lodNumbers);
+                    }
+                }
+                if (viewCull && node.hasChild)
+                {
+                    spaceNodes.Enqueue(node.child_0);
+                    spaceNodes.Enqueue(node.child_1);
+                    spaceNodes.Enqueue(node.child_2);
+                    spaceNodes.Enqueue(node.child_3);
+                }
+            }
+           
+        }
+        public void GameObjCull(DElement* instanceElements,int elementsIndex,NativeArray<int> lodNumbers)
+        {
+            int visible = 1;
+            float2 distRadius = new float2(0, 0);
+            ref DElement treeElement = ref instanceElements[elementsIndex];
+            for (int planeIndex = 0; planeIndex < 6; ++planeIndex)
+            {
+                ref DPlane plane = ref planes[planeIndex];
+                distRadius.x = math.dot(plane.normalDist.xyz, treeElement.m_bounds.center) + plane.normalDist.w;
+                distRadius.y = math.dot(math.abs(plane.normalDist.xyz), treeElement.m_bounds.extents);
+                visible = math.select(visible, 0, distRadius.x + distRadius.y < 0);
+            }
+            if (visible == 1)
+            {
+                int lodNumber = lodNumbers[treeElement.m_mark];
+                treeElement.m_visible = true;
+                treeElement.m_lodLevel = lodNumber - 1;
+            }
         }
     }
-    [BurstCompile]
+   //[BurstCompile]
     public unsafe struct ResetElementState : IJobParallelFor
     {
         [NativeDisableUnsafePtrRestriction]
@@ -44,7 +104,7 @@ namespace Unity.MergeInstancingSystem
         }
     }
     
-    [BurstCompile]
+    //[BurstCompile]
     public unsafe struct TreeNodeUpadateJob : IJob
     {
         [ReadOnly] 
@@ -82,7 +142,6 @@ namespace Unity.MergeInstancingSystem
                 ref var box = ref node.m_box;
                 //根据距离剔除是否通过
                 int visible = 1;
-                bool disCull = Geometry.DisCull(cameraPos, ref box, preRelative, cullDis);
                 float2 distRadius = new float2(0, 0);
                 for (int planeIndex = 0; planeIndex < 6; ++planeIndex)
                 {
@@ -93,14 +152,14 @@ namespace Unity.MergeInstancingSystem
                 }
                 //视锥体剔除是否通过
                 bool viewCull = visible == 1;
-                if (!disCull && viewCull)
+                if (viewCull)
                 {
                     for (int i = node.objhead; i < node.objlength + node.objhead; i++)
                     {
                         GameObjCull(instanceElements,i,lodInfos,lodNumbers,cameraPos,matrix_Proj);
                     }
                 }
-                if (!disCull && viewCull && node.hasChild)
+                if (viewCull && node.hasChild)
                 {
                     spaceNodes.Enqueue(node.child_0);
                     spaceNodes.Enqueue(node.child_1);
@@ -134,23 +193,22 @@ namespace Unity.MergeInstancingSystem
         }
         private int ComputeLOD(int numLOD,float3 viewOringin,float4x4 matrix_Proj,ref DSphere boundSphere,ref DAABB boundBox,float* lODInfos)
         {
+            //球半径在屏幕上的投影
             float screenRadiusSqr = Geometry.ComputeBoundsScreenRadiusSquared(boundSphere.radius, boundBox.center, viewOringin, matrix_Proj);
             //Lod的总数
-            for (int lodIndex = numLOD; lodIndex >= 0; --lodIndex)
+            for (int lodIndex = 0; lodIndex < numLOD; lodIndex++)
             {
-                //一种Lod级别
                 float treeLODInfo =  lODInfos[lodIndex];
-
-                if (MathExtent.sqr(treeLODInfo * 0.5f) >= screenRadiusSqr)
+                if (screenRadiusSqr >= MathExtent.sqr(treeLODInfo*0.5f))
                 {
                     return lodIndex;
                 }
             }
-            return 0;
+            return -1;
         }
     }
     
-    [BurstCompile]
+    //[BurstCompile]
     public unsafe struct InstanceScatterJob : IJobParallelFor
     {
         [ReadOnly] 
@@ -174,7 +232,7 @@ namespace Unity.MergeInstancingSystem
         }
     }
     
-    [BurstCompile]
+    //[BurstCompile]
     public struct DInstanceDataJob : IJobParallelFor
     {
         [Collections.ReadOnly] 

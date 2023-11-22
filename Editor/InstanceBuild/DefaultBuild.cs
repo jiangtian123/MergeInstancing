@@ -301,7 +301,7 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
                 List<InstanceSector> sectors = new List<InstanceSector>();
                 List<float> lodInfos = new List<float>();
                 sectors.Add(GetInstanceSector(meshRenderers,gameObject));
-                lodInfos.Add(1);
+                lodInfos.Add(0);
                 Bounds bounds = meshRenderers[0].localBounds;
                 for (int i = 1; i < meshRenderers.Count; i++)
                 {

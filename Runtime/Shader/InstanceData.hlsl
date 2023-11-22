@@ -1,8 +1,8 @@
 #ifndef CUSTOM_INSTANCE_INCLUDED
 #define CUSTOM_INSTANCE_INCLUDED
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-#pragma multi_compile _ CUSTOM_INSTANCING_ON
-#pragma multi_compile _ CUSTOM_LIGHTMAP_ON
+#pragma multi_compile_local _ CUSTOM_INSTANCING_ON
+#pragma multi_compile_local _ CUSTOM_LIGHTMAP_ON
 float4 instance_SHAr;
 float4 instance_SHAg;
 float4 instance_SHAb;
@@ -100,18 +100,9 @@ real3 InstanceSampleSingleLightmap(TEXTURE2D_LIGHTMAP_PARAM(lightmapTex, lightma
 void SampleDirectionalLightmap(TEXTURE2D_LIGHTMAP_PARAM(lightmapTex, lightmapSampler), TEXTURE2D_LIGHTMAP_PARAM(lightmapDirTex, lightmapDirSampler), float2 uv,float index, float4 transform,
     float3 normalWS, float3 backNormalWS, bool encodedLightmap, real4 decodeInstructions, inout real3 bakeDiffuseLighting, inout real3 backBakeDiffuseLighting)
 {
-    // In directional mode Enlighten bakes dominant light direction
-    // in a way, that using it for half Lambert and then dividing by a "rebalancing coefficient"
-    // gives a result close to plain diffuse response lightmaps, but normalmapped.
-
-    // Note that dir is not unit length on purpose. Its length is "directionality", like
-    // for the directional specular lightmaps.
-
-    // transform is scale and bias
     uv = uv * transform.xy + transform.zw;
 
     real4 direction = SAMPLE_TEXTURE2D_ARRAY(lightmapDirTex, lightmapDirSampler, uv,index);
-    // Remark: baked lightmap is RGBM for now, dynamic lightmap is RGB9E5
     real3 illuminance = real3(0.0, 0.0, 0.0);
     if (encodedLightmap)
     {
@@ -152,10 +143,6 @@ half3 GetLightData(float2 staticLightmapUV, float index, half3 normalWS)
     bool encodedLightmap = true;
     #endif
     half4 decodeInstructions = half4(LIGHTMAP_HDR_MULTIPLIER, LIGHTMAP_HDR_EXPONENT, 0.0h, 0.0h);
-
-    // The shader library sample lightmap functions transform the lightmap uv coords to apply bias and scale.
-    // However, universal pipeline already transformed those coords in vertex. We pass half4(1, 1, 0, 0) and
-    // the compiler will optimize the transform away.
     half4 transformCoords = half4(1, 1, 0, 0);
 
     float3 diffuseLighting = 0;

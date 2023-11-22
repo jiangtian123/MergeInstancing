@@ -248,12 +248,12 @@ namespace Unity.MergeInstancingSystem.CustomData
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       public static float ComputeBoundsScreenRadiusSquared(in float sphereRadius, in float3 boundOrigin, in float3 viewOrigin, in float4x4 projMatrix)
       {
-         float DistSqr = DistSquared(boundOrigin, viewOrigin) * projMatrix.c2.z;
+         float DistSqr = DistSquared(boundOrigin, viewOrigin) * Math.Abs(projMatrix.c2.z);
 
          float ScreenMultiple = math.max(0.5f * projMatrix.c0.x, 0.5f * projMatrix.c1.y);
          ScreenMultiple *= sphereRadius;
 
-         return (ScreenMultiple * ScreenMultiple) / math.max(1, DistSqr);
+         return math.min(1,(ScreenMultiple * ScreenMultiple) / math.max(1, DistSqr));
       }
       [MethodImpl(MethodImplOptions.AggressiveInlining)]
       public static float CaculateBoundRadius(in DAABB bound)

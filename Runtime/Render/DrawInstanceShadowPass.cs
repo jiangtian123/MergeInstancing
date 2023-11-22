@@ -1,6 +1,8 @@
 ﻿using System.Collections.Generic;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
+using Unity.MergeInstancingSystem.CustomData;
 using Unity.MergeInstancingSystem.New;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -13,7 +15,7 @@ namespace Unity.MergeInstancingSystem.Render
     /// <summary>
     /// 阴影渲染需要的所有的值都在前一个pass给提交过了，我们只需要画上去就可以
     /// </summary>
-    public class DrawInstanceShadowPass : ScriptableRenderPass
+    public unsafe class DrawInstanceShadowPass : ScriptableRenderPass
     {
         const string Instance_Shadow = "Render Instance Shadow";
         const int k_MaxCascades = 4;
@@ -116,24 +118,7 @@ namespace Unity.MergeInstancingSystem.Render
                 return;
             }
             if (Application.isPlaying == false) { return; }
-            Vector3 viewOrigin = renderingData.cameraData.camera.transform.position;
-            float maxShadowDis = renderingData.cameraData.maxShadowDistance;
-            NativeList<JobHandle> taskHandles = new NativeList<JobHandle>(256, Allocator.Temp);
-            //准备阴影渲染数据
-            for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
-            {
-                ControllerComponent.instanceComponents[i].UpDateTreeWithShadow(viewOrigin,maxShadowDis,taskHandles);
-            }
-            JobHandle.CompleteAll(taskHandles);
-            taskHandles.Clear();
-            for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
-            {
-                ControllerComponent.instanceComponents[i].DispatchSetup(taskHandles,true);
-            }
-            JobHandle.CompleteAll(taskHandles);
-            taskHandles.Clear();
-            taskHandles.Dispose();
-            RenderInstanceShadow(ref context, ref renderingData.cullResults, ref renderingData.lightData, ref renderingData.shadowData);
+            RenderInstanceShadow(ref context, ref renderingData.lightData, ref renderingData.shadowData);
         }
 
         /// <summary>
@@ -161,7 +146,7 @@ namespace Unity.MergeInstancingSystem.Render
             
         }
        
-        void RenderInstanceShadow(ref ScriptableRenderContext context, ref CullingResults cullResults, ref LightData lightData, ref ShadowData shadowData)
+        void RenderInstanceShadow(ref ScriptableRenderContext context, ref LightData lightData, ref ShadowData shadowData)
         {
             int shadowLightIndex = lightData.mainLightIndex;
             if (shadowLightIndex == -1)
@@ -170,7 +155,6 @@ namespace Unity.MergeInstancingSystem.Render
             CommandBuffer cmd = CommandBufferPool.Get();
             using (new ProfilingScope(cmd,InstanceShadow))
             {
-                
                 for (int cascadeIndex = 0; cascadeIndex < m_ShadowCasterCascadesCount; ++cascadeIndex)
                 {
                     Vector4 shadowBias = ShadowUtils.GetShadowBias(ref shadowLight, shadowLightIndex, ref shadowData, m_CascadeSlices[cascadeIndex].projectionMatrix, m_CascadeSlices[cascadeIndex].resolution);
@@ -188,18 +172,7 @@ namespace Unity.MergeInstancingSystem.Render
                 ControllerComponent.instanceComponents[i].Reset();
             }
         }
-
-        private bool JudgeDis(float rendererDis)
-        {
-            if (rendererDis > m_MaxShadowDistanceSq)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
-        }
+        
         public void RenderShadowSlice(CommandBuffer cmd, ref ScriptableRenderContext context,
             ref ShadowSliceData shadowSliceData,
             Matrix4x4 proj, Matrix4x4 view)
@@ -208,6 +181,29 @@ namespace Unity.MergeInstancingSystem.Render
             cmd.SetViewProjectionMatrices(view, proj);
             context.ExecuteCommandBuffer(cmd);
             cmd.Clear();
+            var planes =  GeometryUtility.CalculateFrustumPlanes(proj*view);
+            NativeArray<DPlane> shadowPlanes = new NativeArray<DPlane>(6, Allocator.TempJob);
+            NativeList<JobHandle> taskHandles = new NativeList<JobHandle>(256, Allocator.Temp);
+            for (var i = 0; i < 6; ++i)
+            {
+                shadowPlanes[i] = planes[i];
+            }
+            DPlane* planesPtr = (DPlane*)shadowPlanes.GetUnsafePtr();
+            //准备阴影渲染数据
+            for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
+            {
+                ControllerComponent.instanceComponents[i].UpDateTreeWithShadow(planesPtr,taskHandles);
+            }
+            JobHandle.CompleteAll(taskHandles);
+            shadowPlanes.Dispose();
+            taskHandles.Clear();
+            for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
+            {
+                ControllerComponent.instanceComponents[i].DispatchSetup(taskHandles,true);
+            }
+            JobHandle.CompleteAll(taskHandles);
+            taskHandles.Clear();
+            taskHandles.Dispose();
             for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
             {
                 ControllerComponent.instanceComponents[i].DispatchDrawShadow(cmd,1);

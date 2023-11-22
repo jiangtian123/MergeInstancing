@@ -20,10 +20,18 @@ namespace Unity.MergeInstancingSystem.Render
             m_shadowPass = new DrawInstanceShadowPass(RenderPassEvent.BeforeRenderingShadows+1);
             m_TransparentPass = new DrawInstanceObjectPass(RenderPassEvent.BeforeRenderingTransparents);
         }
-        
+        private bool CheckCullingMask(int mask, int layer)
+        {
+            return (mask & (1 << layer)) != 0;
+        }
+
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
             if (Application.isPlaying == false) { return; }
+            if (!CheckCullingMask(renderingData.cameraData.camera.cullingMask, layer))
+            {
+                return;
+            }
             var stack = VolumeManager.instance.stack;
             var Taa = stack.GetComponent<TAAVolume>();
             bool applyPostProcessing = renderingData.cameraData.postProcessEnabled;
@@ -41,8 +49,8 @@ namespace Unity.MergeInstancingSystem.Render
             {
                 renderer.EnqueuePass(m_shadowPass);
             }
-            m_OpaquePass.Setup(isMotionVector, layer,RenderQueue.Geometry);
-            m_TransparentPass.Setup(isMotionVector,layer,RenderQueue.Transparent);
+            m_OpaquePass.Setup(isMotionVector, RenderQueue.Geometry);
+            m_TransparentPass.Setup(isMotionVector,RenderQueue.Transparent);
             renderer.EnqueuePass(m_OpaquePass);
             renderer.EnqueuePass(m_TransparentPass);
         }

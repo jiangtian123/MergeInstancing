@@ -46,6 +46,52 @@ namespace Unity.MergeInstancingSystem.New
                 childTreeNode.Initialize(controller);
             }
         }
+
+        public unsafe void UpdateWithShadow(NativeList<JobHandle> taskJobHandles,int index,in DPlane* planes)
+        {
+            if (m_controller.m_useJob && m_level >= m_controller.m_jobBeginLevel)
+            {
+                TreeNodeUpdateShadowJob treeNodeUpdateShadowJob = new TreeNodeUpdateShadowJob();
+                treeNodeUpdateShadowJob.planes = planes;
+                treeNodeUpdateShadowJob.lodNumbers = m_controller.m_lodNumber;
+                treeNodeUpdateShadowJob.treeNodes = (JobTreeData*)m_controller.m_jobGameJectData.GetUnsafePtr();
+                treeNodeUpdateShadowJob.root = index;
+                treeNodeUpdateShadowJob.instanceElements =  (DElement*)m_controller.m_instanceEle.GetUnsafePtr();
+                taskJobHandles.Add(treeNodeUpdateShadowJob.Schedule());
+                return;
+            }
+            int visible = 1;
+            float2 distRadius = new float2(0, 0);
+            for (int planeIndex = 0; planeIndex < 6; ++planeIndex)
+            {
+                ref DPlane plane = ref planes[planeIndex];
+                distRadius.x = math.dot(plane.normalDist.xyz, m_Box.center) + plane.normalDist.w;
+                distRadius.y = math.dot(math.abs(plane.normalDist.xyz), m_Box.extents);
+                visible = math.select(visible,0,  distRadius.x + distRadius.y < 0);
+            }
+            //视锥体剔除是否通过
+            bool viewCull = visible == 1;
+            if (viewCull)
+            {
+                for (int i = m_Gameobj.head; i < m_Gameobj.number + m_Gameobj.head; i++)
+                {
+                    var lodNumber = m_controller.m_lodNumber[m_controller.m_instanceEle[i].m_mark];
+                    var ele = m_controller.m_instanceEle[i];
+                    ele.m_visible = true;
+                    ele.m_lodLevel = lodNumber - 1;
+                    m_controller.m_instanceEle[i] = ele;
+                }
+            }
+            if (viewCull && hasChild)
+            {
+                for (int i = 0; i < m_childTreeNodeIds.Count; i++)
+                {
+                    int childIndex = m_childTreeNodeIds[i];
+                    var node = m_container.Get(childIndex);
+                    node.UpdateWithShadow(taskJobHandles, childIndex, planes);
+                }
+            }
+        }
         /// <summary>
         /// 遍历树的地方
         /// </summary>
@@ -72,10 +118,9 @@ namespace Unity.MergeInstancingSystem.New
                 taskJobHandles.Add(upadataJob.Schedule());
                 return;
             }
-            bool disCull = Geometry.DisCull(cameraPos,ref m_Box,preRelative,cullDis);
             bool viewCull = Geometry.IntersectAABBFrustum(m_Box, planes,
                 out var completely);
-            if (!disCull && viewCull)
+            if (viewCull)
             {
                 for (int i = m_Gameobj.head; i < m_Gameobj.number + m_Gameobj.head; i++)
                 {
@@ -91,7 +136,7 @@ namespace Unity.MergeInstancingSystem.New
                 }
             }
             //通过剔除就遍历子
-            if (!disCull && viewCull && hasChild)
+            if (viewCull && hasChild)
             {
                 for (int i = 0; i < m_childTreeNodeIds.Count; i++)
                 {
@@ -105,17 +150,15 @@ namespace Unity.MergeInstancingSystem.New
         {
             float screenRadiusSqr = Geometry.ComputeBoundsScreenRadiusSquared(boundSphere.radius, boundBox.center, viewOringin, matrix_Proj);
             //Lod的总数
-            for (int lodIndex = numLOD; lodIndex >= 0; --lodIndex)
+            for (int lodIndex = 0; lodIndex < numLOD; lodIndex++)
             {
-                //一种Lod级别
                 float treeLODInfo =  lODInfos[lodIndex];
-
-                if (MathExtent.sqr(treeLODInfo * 0.5f) >= screenRadiusSqr)
+                if (screenRadiusSqr >= MathExtent.sqr(treeLODInfo*0.5f))
                 {
                     return lodIndex;
                 }
             }
-            return 0;
+            return -1;
         }
         public void Dispose()
         {
