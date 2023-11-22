@@ -23,16 +23,14 @@ namespace Unity.MergeInstancingSystem.Render
         private static readonly ProfilingSampler m_ProfilingRenderInstanceHaveMotionVectors = new ProfilingSampler(k_HaveMotionVectorInstanceTag);
         float lastTime = 0;
         private readonly int MAX_BUFFCOUNT = 1000;
-        public RenderQueue m_renderqueue;
         public DrawInstanceObjectPass(RenderPassEvent evt)
         {
             isUseMotionVectors = false;
             renderPassEvent = evt;
             motionMRT = new RenderTargetIdentifier[2];
         }
-        public void Setup(bool useMotion, RenderQueue renderQueue)
+        public void Setup(bool useMotion)
         {
-            m_renderqueue = renderQueue;
             isUseMotionVectors = useMotion;
         }
         public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
@@ -45,7 +43,6 @@ namespace Unity.MergeInstancingSystem.Render
             Profiler.BeginSample("CustomRenderer");
             CommandBuffer cmd = CommandBufferPool.Get();
             var cameraData = renderingData.cameraData;
-            var camera = cameraData.camera;
             var taskHandles = new NativeList<JobHandle>(256, Allocator.Temp);
             var planes = new NativeArray<DPlane>(6, Allocator.TempJob);
             DPlane* planesPtr = (DPlane*)planes.GetUnsafePtr();
@@ -59,7 +56,6 @@ namespace Unity.MergeInstancingSystem.Render
             //投影矩阵
             var matrixProj = cameraData.GetProjectionMatrix();
             //剔除操作
-            Profiler.BeginSample("Frame Begin");
             for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
             {
                 ControllerComponent.instanceComponents[i].UpDateTree(planesPtr,viewOrigin,matrixProj,taskHandles);
@@ -76,14 +72,17 @@ namespace Unity.MergeInstancingSystem.Render
             {
                 ControllerComponent.instanceComponents[i].DispatchSetup(taskHandles,false);
             }
-            Profiler.EndSample();
             using (new ProfilingScope(cmd, isUseMotionVectors?m_ProfilingRenderInstanceHaveMotionVectors:m_ProfilingRenderInstanceNoMotionVectors))
             {
                 context.ExecuteCommandBuffer(cmd);
                 cmd.Clear();
                 for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
                 {
-                    ControllerComponent.instanceComponents[i].DispatchDraw(cmd,0,m_renderqueue);
+                    ControllerComponent.instanceComponents[i].DispatchDraw(cmd,0,RenderQueue.Geometry);
+                }
+                for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
+                {
+                    ControllerComponent.instanceComponents[i].DispatchDraw(cmd,0,RenderQueue.Transparent);
                 }
             }
             Profiler.EndSample();

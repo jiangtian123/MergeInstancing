@@ -157,20 +157,12 @@ namespace Unity.MergeInstancingSystem.New
         public void AddData(ref DGameObjectData dataIndex,ref LodSerializableData serializable, bool isShadow)
         {
             renderObjectNumber++;
-            PoolManager.Instance.AddData(m_poolId.m_matrix4x4ID,dataIndex.m_MatrixIndex,ref serializable.originMatrix);
+            PoolManager.Instance.AddData(m_poolId.m_matrix4x4ID,serializable.originMatrix[dataIndex.m_MatrixIndex]);
             if (!isShadow && useLightMap)
             {
-                PoolManager.Instance.AddData(m_poolId.m_lightMapIndexId,dataIndex.m_LightIndex, ref serializable.lightmapIndex);
-                PoolManager.Instance.AddData(m_poolId.m_lightMapScaleOffsetID,dataIndex.m_LightIndex,ref serializable.lightmapOffest);
+                PoolManager.Instance.AddData(m_poolId.m_lightMapIndexId,serializable.lightmapIndex[dataIndex.m_LightIndex]);
+                PoolManager.Instance.AddData(m_poolId.m_lightMapScaleOffsetID,serializable.lightmapOffest[dataIndex.m_LightIndex]);
             }
-        }
-
-        public void AddData2(ref DGameObjectData dataIndexz,ref LodSerializableData serializablez, bool isShadowz)
-        {
-            var t = dataIndexz.m_LightIndex;
-            var a = serializablez.lightmapIndex[0];
-            var b = isShadowz;
-            test = t + (int)a + (b ? 0 : 1);
         }
         public bool Equals(InstanceSubSector target)
         {

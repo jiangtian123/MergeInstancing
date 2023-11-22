@@ -11,14 +11,12 @@ namespace Unity.MergeInstancingSystem.Render
     {
         private DrawInstanceShadowPass m_shadowPass;
         private DrawInstanceObjectPass m_OpaquePass;
-        private DrawInstanceObjectPass m_TransparentPass;
 
         public LayerMask layer;
         public override void Create()
         {
             m_OpaquePass = new DrawInstanceObjectPass(RenderPassEvent.AfterRenderingOpaques);
             m_shadowPass = new DrawInstanceShadowPass(RenderPassEvent.BeforeRenderingShadows+1);
-            m_TransparentPass = new DrawInstanceObjectPass(RenderPassEvent.BeforeRenderingTransparents);
         }
         private bool CheckCullingMask(int mask, int layer)
         {
@@ -43,16 +41,13 @@ namespace Unity.MergeInstancingSystem.Render
                     isMotionVector = true;
                 }
             }
-
             InitRenderData();
             if (m_shadowPass.Setup(ref renderingData))
             {
                 renderer.EnqueuePass(m_shadowPass);
             }
-            m_OpaquePass.Setup(isMotionVector, RenderQueue.Geometry);
-            m_TransparentPass.Setup(isMotionVector,RenderQueue.Transparent);
+            m_OpaquePass.Setup(isMotionVector);
             renderer.EnqueuePass(m_OpaquePass);
-            renderer.EnqueuePass(m_TransparentPass);
         }
 
         void InitRenderData()

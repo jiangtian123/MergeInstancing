@@ -41,16 +41,13 @@ namespace Unity.MergeInstancingSystem.New
         
         public void DispatchSetup(int lodLevel,SerializableData serializableData,InstanceSubSector[] instanceSubSectors,bool isShadow)
         {
-            //Profiler.BeginSample("DispatchSetup");
             if (lodLevel >= m_lod.Length)
             {
                 Debug.Log("has error on DispatchSetup");
-                //Profiler.EndSample();
                 return;
             }
             if (lodLevel == -1)
             {
-                //Profiler.EndSample();
                 return;
             }
             var sector = m_lod[lodLevel];
@@ -67,12 +64,9 @@ namespace Unity.MergeInstancingSystem.New
                     gameObjectData.m_LightIndex = number;
                     number++;
                 }
-                //CallFun.Begin();
                 subsector.AddData(ref gameObjectData,ref lodSerializable,isShadow);
-                //CallFun.End();
             }
             Circulation.End();
-            //Profiler.EndSample();
         }
     }
 }

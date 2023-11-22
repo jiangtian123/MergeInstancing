@@ -125,7 +125,7 @@ namespace Unity.MergeInstancingSystem.Pool
             return m_item;
         }
         
-        public void Add(int index,T[] element)
+        public void Add(T element)
         {
             if (m_item[m_Index].IsFull)
             {
@@ -133,7 +133,7 @@ namespace Unity.MergeInstancingSystem.Pool
                 m_Index += 1;
             }
             var pool = m_item[m_Index];
-            pool.OnePool[pool.length] = element[index];
+            pool.OnePool[pool.length] = element;
             pool.length += 1;
         }
         /// <summary>
