@@ -44,10 +44,11 @@ namespace Unity.MergeInstancingSystem.New
     /// <summary>
     /// 因为一个
     /// </summary>
-    public class DGameObjectData
+    public struct DGameObjectData
     {
-        public int m_MatrixIndex;
-        public int m_LightIndex;
+        public Matrix4x4 originMatrix;
+        public float lightMapIndex;
+        public Vector4 lightMapOffest;
     }
    
 }

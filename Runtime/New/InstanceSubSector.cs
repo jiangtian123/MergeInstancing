@@ -154,14 +154,14 @@ namespace Unity.MergeInstancingSystem.New
             return ID;
         }
 
-        public void AddData(ref DGameObjectData dataIndex,ref LodSerializableData serializable, bool isShadow)
+        public void AddData(DGameObjectData data,bool isShadow)
         {
             renderObjectNumber++;
-            PoolManager.Instance.AddData(m_poolId.m_matrix4x4ID,serializable.originMatrix[dataIndex.m_MatrixIndex]);
+            PoolManager.Instance.AddData(m_poolId.m_matrix4x4ID,data.originMatrix);
             if (!isShadow && useLightMap)
             {
-                PoolManager.Instance.AddData(m_poolId.m_lightMapIndexId,serializable.lightmapIndex[dataIndex.m_LightIndex]);
-                PoolManager.Instance.AddData(m_poolId.m_lightMapScaleOffsetID,serializable.lightmapOffest[dataIndex.m_LightIndex]);
+                PoolManager.Instance.AddData(m_poolId.m_lightMapIndexId,data.lightMapIndex);
+                PoolManager.Instance.AddData(m_poolId.m_lightMapScaleOffsetID,data.lightMapOffest);
             }
         }
         public bool Equals(InstanceSubSector target)

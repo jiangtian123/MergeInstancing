@@ -27,12 +27,6 @@ namespace Unity.MergeInstancingSystem.New
         /// </summary>
         [SerializeField]
         public List<float> m_LODInfos;
-        
-        DGameObjectData gameObjectData = new DGameObjectData();
-        
-        
-        UnityEngine.Profiling.CustomSampler Circulation = CustomSampler.Create("For Circulation");
-        UnityEngine.Profiling.CustomSampler CallFun = CustomSampler.Create("Sub Sector Call");
         /// <summary>
         /// 根据Lod级别准备需要渲染的数据
         /// </summary>
@@ -53,20 +47,20 @@ namespace Unity.MergeInstancingSystem.New
             var sector = m_lod[lodLevel];
             var lodSerializable = serializableData.m_LodData[lodLevel];
             int number = 0;
-            Circulation.Begin();
             for (int i = 0; i < sector.MeshCount; i++)
             {
                 var subsectorIndex = sector.m_meshs[i];
                 var subsector = instanceSubSectors[subsectorIndex];
-                gameObjectData.m_MatrixIndex = i;
+                DGameObjectData gameObjectData = new DGameObjectData();
+                gameObjectData.originMatrix = lodSerializable.originMatrix[i];
                 if (!isShadow && subsector.useLightMap)
                 {
-                    gameObjectData.m_LightIndex = number;
+                    gameObjectData.lightMapIndex = lodSerializable.lightmapIndex[number];
+                    gameObjectData.lightMapOffest = lodSerializable.lightmapOffest[number];
                     number++;
                 }
-                subsector.AddData(ref gameObjectData,ref lodSerializable,isShadow);
+                subsector.AddData(gameObjectData,isShadow);
             }
-            Circulation.End();
         }
     }
 }
