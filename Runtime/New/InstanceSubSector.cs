@@ -37,6 +37,10 @@ namespace Unity.MergeInstancingSystem.New
         [SerializeField] 
         public bool m_castShadow;
 
+        [NonSerialized]
+        public int renderObjectNumber = 0;
+
+        public static int test;
         public int RenderCount
         {
             get
@@ -54,7 +58,7 @@ namespace Unity.MergeInstancingSystem.New
         
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DispatchDraw(CommandBuffer cmdBuffer,in int passIndex,RenderQueue renderQueue,bool UseMotionVectors)
+        public void DispatchDraw(CommandBuffer cmdBuffer,in int passIndex,RenderQueue renderQueue)
         {
             if(m_Renderqueue != renderQueue)return;
             if (useLightMap)
@@ -150,16 +154,24 @@ namespace Unity.MergeInstancingSystem.New
             return ID;
         }
 
-        public void AddData(DGameObjectData data,bool isShadow)
+        public void AddData(ref DGameObjectData dataIndex,ref LodSerializableData serializable, bool isShadow)
         {
-            PoolManager.Instance.AddData(m_poolId.m_matrix4x4ID, data.originMatrix);
+            renderObjectNumber++;
+            PoolManager.Instance.AddData(m_poolId.m_matrix4x4ID,dataIndex.m_MatrixIndex,ref serializable.originMatrix);
             if (!isShadow && useLightMap)
             {
-                PoolManager.Instance.AddData(m_poolId.m_lightMapIndexId, data.lightMapIndex.Value);
-                PoolManager.Instance.AddData(m_poolId.m_lightMapScaleOffsetID, data.lightMapOffest.Value);
+                PoolManager.Instance.AddData(m_poolId.m_lightMapIndexId,dataIndex.m_LightIndex, ref serializable.lightmapIndex);
+                PoolManager.Instance.AddData(m_poolId.m_lightMapScaleOffsetID,dataIndex.m_LightIndex,ref serializable.lightmapOffest);
             }
         }
-        
+
+        public void AddData2(ref DGameObjectData dataIndexz,ref LodSerializableData serializablez, bool isShadowz)
+        {
+            var t = dataIndexz.m_LightIndex;
+            var a = serializablez.lightmapIndex[0];
+            var b = isShadowz;
+            test = t + (int)a + (b ? 0 : 1);
+        }
         public bool Equals(InstanceSubSector target)
         {
             return target.GetHashCode() == this.GetHashCode();
@@ -172,13 +184,14 @@ namespace Unity.MergeInstancingSystem.New
         public override int GetHashCode()
         {
             int meshHash = m_mesh.GetHashCode();
-            int matHash = materials.GetHashCode();
+            int matHash = materials[0].GetHashCode();
             long indentif = meshHash + matHash;
             int thisHashCode = indentif.GetHashCode() << 2 | (useLightMap ? 0 : 1) << 1 | (m_castShadow ? 1 : 0);
             return thisHashCode;
         }
         public void ResetBuffer()
         {
+            renderObjectNumber = 0;
             PoolManager.Instance.ResetPool<Matrix4x4>(m_poolId.m_matrix4x4ID);
             if (useLightMap)
             {

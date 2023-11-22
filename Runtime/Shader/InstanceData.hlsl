@@ -56,10 +56,10 @@ float4 instance_SHAb;
 
 
 #ifdef CUSTOM_INSTANCING_ON
-    #if defined(_SHADOWMASK) && defined(_LIGHTMAP_ON)
+    #ifdef CUSTOM_LIGHTMAP_ON
         #define GETSHADOWMASK(uv) SAMPLE_TEXTURE2D_ARRAY(_InstanceShadowMaskArray,sampler_InstanceShadowMaskArray,uv,LightMapIndex);
     #else
-        #define GETSHADOWMASK(uv) SAMPLE_SHADOWMASK(uv)
+        #define GETSHADOWMASK(uv) half4(1, 1, 1, 1)
     #endif
 #else
     #define GETSHADOWMASK(uv) SAMPLE_SHADOWMASK(uv)

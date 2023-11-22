@@ -12,18 +12,6 @@ using Object = UnityEngine.Object;
         // ---------------- Build Setting ----------------------------------
         [SerializeField]
         private float m_ChunkSize = 30.0f;
-
-        [SerializeField] 
-        private bool m_UseMotionvector = false;
-        
-        [SerializeField]
-        private bool m_PreciseCulling;
-        
-        [SerializeField]
-        private float m_LODDistance = 0.3f;
-        
-        [SerializeField]
-        private float m_CullDistance = 0.01f;
         
         [SerializeField]
         private float m_MinObjectSize = 0.0f;
@@ -33,6 +21,9 @@ using Object = UnityEngine.Object;
 
         [SerializeField] 
         private int m_beginJobLevel = 1;
+        
+        [SerializeField] 
+        private bool m_CastShadow = true;
         //----------------- 接口 --------------------------------------------
         [SerializeField]
         private string m_SpaceSplitterTypeStr;
@@ -82,33 +73,6 @@ using Object = UnityEngine.Object;
         {
             get { return m_ChunkSize; }
         }
-
-        public bool UseMotionvector
-        {
-            get
-            {
-                return m_UseMotionvector;
-            }
-        }
-
-        public bool PreciseCulling
-        {
-            get
-            {
-                return m_PreciseCulling;
-            }
-        }
-        public float LODDistance
-        {
-            get { return m_LODDistance; }
-        }
-        
-        public float CullDistance
-        {
-            set { m_CullDistance = value; }
-            get { return m_CullDistance; }
-        }
-
         public bool UseJob
         {
             set
@@ -130,6 +94,18 @@ using Object = UnityEngine.Object;
             get
             {
                 return m_beginJobLevel;
+            }
+        }
+
+        public bool CastShadow
+        {
+            get
+            {
+                return m_CastShadow;
+            }
+            set
+            {
+                m_CastShadow = value;
             }
         }
         public Type SpaceSplitterType

@@ -39,6 +39,10 @@ namespace Unity.MergeInstancingSystem.Render
         private void ConvertToTexture2DArray()
         {
             LightmapData[] lightmaps =  LightmapSettings.lightmaps;
+            if (lightmaps == null)
+            {
+                return;
+            }
             List<Texture2D> m_LightMap = new List<Texture2D>();
             List<Texture2D> m_ShadowMaskMap = new List<Texture2D>();
             for (int i = 0; i < lightmaps.Length; i++)

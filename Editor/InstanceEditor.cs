@@ -31,12 +31,11 @@ namespace Unity.MergeInstancingSystem
         }
         
         private SerializedProperty m_ChunkSizeProperty;
-        private SerializedProperty m_LODDistanceProperty;
-        private SerializedProperty m_CullDistanceProperty;
         private SerializedProperty m_MinObjectSizeProperty;
-        private SerializedProperty m_useMotionvector;
-        private SerializedProperty m_usePreciseCulling;
-        private LODSlider m_LODSlider;
+        private SerializedProperty m_UseJob;
+        private SerializedProperty m_BeginJobLevel;
+        private SerializedProperty m_CastShadow;
+        
         
         private Type[] m_SpaceSplitterTypes;
         private string[] m_SpaceSplitterNames;
@@ -70,15 +69,11 @@ namespace Unity.MergeInstancingSystem
         {
             //serializedObject.FindProperty 从目标脚本的序列化属性中找到这个属性。
             m_ChunkSizeProperty = serializedObject.FindProperty("m_ChunkSize");
-            m_LODDistanceProperty = serializedObject.FindProperty("m_LODDistance");
-            m_CullDistanceProperty = serializedObject.FindProperty("m_CullDistance");
+            
             m_MinObjectSizeProperty = serializedObject.FindProperty("m_MinObjectSize");
-            m_useMotionvector = serializedObject.FindProperty("m_UseMotionvector");
-            m_usePreciseCulling = serializedObject.FindProperty("m_PreciseCulling");
-            //创建一个滑条
-            m_LODSlider = new LODSlider(true, "Cull");
-            m_LODSlider.InsertRange("High", m_LODDistanceProperty);
-            m_LODSlider.InsertRange("Low", m_CullDistanceProperty);
+            m_UseJob = serializedObject.FindProperty("m_useJob");
+            m_BeginJobLevel = serializedObject.FindProperty("m_beginJobLevel");
+            m_CastShadow = serializedObject.FindProperty("m_CastShadow");
             
             m_SpaceSplitterTypes = SpaceSplitterTypes.GetTypes();
             m_SpaceSplitterNames = m_SpaceSplitterTypes.Select(t => t.Name).ToArray();
@@ -99,6 +94,11 @@ namespace Unity.MergeInstancingSystem
             }
             return value;
         }
+
+        public static int JobBeginLevelLitmit(int value)
+        {
+            return Math.Clamp(value, 0, 2);
+        }
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
@@ -118,10 +118,11 @@ namespace Unity.MergeInstancingSystem
             if (isShowCommon == true)
             {
                 EditorGUILayout.PropertyField(m_ChunkSizeProperty);
-                EditorGUILayout.PropertyField(m_useMotionvector);
-                EditorGUILayout.PropertyField(m_usePreciseCulling);
+                EditorGUILayout.PropertyField(m_UseJob);
+                EditorGUILayout.PropertyField(m_BeginJobLevel);
+                EditorGUILayout.PropertyField(m_CastShadow);
+                m_BeginJobLevel.intValue = JobBeginLevelLitmit(m_BeginJobLevel.intValue);
                 m_ChunkSizeProperty.floatValue = GetChunkSizePropertyValue(m_ChunkSizeProperty.floatValue);
-
                 if (m_splitter != null)
                 {
                     var bounds = instance.GetBounds();
@@ -136,7 +137,6 @@ namespace Unity.MergeInstancingSystem
                     
                     }
                 }
-                m_LODSlider.Draw();
                 EditorGUILayout.PropertyField(m_MinObjectSizeProperty);
             }
             //结束创建折叠头组

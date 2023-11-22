@@ -99,17 +99,14 @@ namespace Unity.MergeInstancingSystem.New
         /// <param name="useJob">是否使用多线程</param>
         /// <param name="limitLevel">开始的Level</param>
         /// <param name="index">当前节点在树中的id</param>
-        public unsafe void Update(NativeList<JobHandle> taskJobHandles,int index,in DPlane* planes,in float3 cameraPos,float4x4  matrixProj,float preRelative)
+        public unsafe void Update(NativeList<JobHandle> taskJobHandles,int index,in DPlane* planes,in float3 cameraPos,float4x4  matrixProj)
         {
-            float cullDis = m_controller.m_cullDistance;
             if (m_controller.m_useJob && m_level >= m_controller.m_jobBeginLevel)
             {
                 TreeNodeUpadateJob upadataJob = new TreeNodeUpadateJob();
-                upadataJob.preRelative = preRelative;
                 upadataJob.planes = planes;
                 upadataJob.cameraPos = cameraPos;
                 upadataJob.root = index;
-                upadataJob.cullDis = cullDis;
                 upadataJob.treeNodes = (JobTreeData*)m_controller.m_jobGameJectData.GetUnsafePtr();
                 upadataJob.matrix_Proj = matrixProj;
                 upadataJob.lodNumbers = m_controller.m_lodNumber;
@@ -142,7 +139,7 @@ namespace Unity.MergeInstancingSystem.New
                 {
                     int childIndex = m_childTreeNodeIds[i];
                     var node = m_container.Get(childIndex);
-                    node.Update(taskJobHandles, childIndex, planes, cameraPos, matrixProj,preRelative);
+                    node.Update(taskJobHandles, childIndex, planes, cameraPos, matrixProj);
                 }
             }
         }

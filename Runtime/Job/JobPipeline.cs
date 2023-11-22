@@ -14,7 +14,7 @@ using UnityEngine.Profiling;
 namespace Unity.MergeInstancingSystem
 {
 
-   // [BurstCompile]
+   [BurstCompile]
     public unsafe struct TreeNodeUpdateShadowJob : IJob
     {
         [ReadOnly] 
@@ -91,7 +91,7 @@ namespace Unity.MergeInstancingSystem
             }
         }
     }
-   //[BurstCompile]
+   [BurstCompile]
     public unsafe struct ResetElementState : IJobParallelFor
     {
         [NativeDisableUnsafePtrRestriction]
@@ -104,7 +104,7 @@ namespace Unity.MergeInstancingSystem
         }
     }
     
-    //[BurstCompile]
+    [BurstCompile]
     public unsafe struct TreeNodeUpadateJob : IJob
     {
         [ReadOnly] 
@@ -127,8 +127,6 @@ namespace Unity.MergeInstancingSystem
         
         public int root;
         public float3 cameraPos;
-        public float preRelative;
-        public float cullDis;
         public float4x4 matrix_Proj;
         
         public void Execute()
@@ -208,7 +206,7 @@ namespace Unity.MergeInstancingSystem
         }
     }
     
-    //[BurstCompile]
+    [BurstCompile]
     public unsafe struct InstanceScatterJob : IJobParallelFor
     {
         [ReadOnly] 
@@ -232,7 +230,7 @@ namespace Unity.MergeInstancingSystem
         }
     }
     
-    //[BurstCompile]
+    [BurstCompile]
     public struct DInstanceDataJob : IJobParallelFor
     {
         [Collections.ReadOnly] 

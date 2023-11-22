@@ -58,21 +58,11 @@ namespace Unity.MergeInstancingSystem.Render
             float3 viewOrigin = renderingData.cameraData.camera.transform.position;
             //投影矩阵
             var matrixProj = cameraData.GetProjectionMatrix();
-            float preRelative = 0;
-            if (camera.orthographic)
-            {
-                preRelative = 0.5f / camera.orthographicSize;
-            }
-            else
-            {
-                float halfAngle = Mathf.Tan(Mathf.Deg2Rad * camera.fieldOfView * 0.5F);
-                preRelative = 0.5f / halfAngle;
-            }
-            preRelative = preRelative * QualitySettings.lodBias;
             //剔除操作
+            Profiler.BeginSample("Frame Begin");
             for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
             {
-                ControllerComponent.instanceComponents[i].UpDateTree(planesPtr,viewOrigin,matrixProj,preRelative,taskHandles);
+                ControllerComponent.instanceComponents[i].UpDateTree(planesPtr,viewOrigin,matrixProj,taskHandles);
             }
             JobHandle.CompleteAll(taskHandles);
             taskHandles.Clear();
@@ -86,13 +76,14 @@ namespace Unity.MergeInstancingSystem.Render
             {
                 ControllerComponent.instanceComponents[i].DispatchSetup(taskHandles,false);
             }
+            Profiler.EndSample();
             using (new ProfilingScope(cmd, isUseMotionVectors?m_ProfilingRenderInstanceHaveMotionVectors:m_ProfilingRenderInstanceNoMotionVectors))
             {
                 context.ExecuteCommandBuffer(cmd);
                 cmd.Clear();
                 for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
                 {
-                    ControllerComponent.instanceComponents[i].DispatchDraw(cmd,0,m_renderqueue,isUseMotionVectors);
+                    ControllerComponent.instanceComponents[i].DispatchDraw(cmd,0,m_renderqueue);
                 }
             }
             Profiler.EndSample();

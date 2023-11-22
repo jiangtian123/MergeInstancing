@@ -38,11 +38,11 @@ namespace Unity.MergeInstancingSystem.Pool
 
         #region AddData
 
-        public void AddData<T>(int poolID,T element)where T : unmanaged
+        public void AddData<T>(int poolID,int index,ref T[] element)where T : unmanaged
         {
             Profiler.BeginSample("Begin Add Pool");
             var pool = (PoolItem<T>)m_pools[poolID];
-            pool.Add(element);
+            pool.Add(index,element);
             Profiler.EndSample();
         }
         public void CopyData<T>(int poolID,T[] source,int head,int length)where T : unmanaged

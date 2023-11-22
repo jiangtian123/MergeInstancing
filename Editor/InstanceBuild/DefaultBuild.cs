@@ -69,16 +69,15 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             m_manager.AddGeneratedResource(instanceData);
             TreeNodeController defaultController = root.AddComponent<TreeNodeController>();
             m_manager.AddGeneratedResource(defaultController);
-            defaultController.m_cullDistance = instance.CullDistance;
             defaultController.m_useJob = instance.UseJob;
             defaultController.m_root = Root;
             defaultController.m_jobBeginLevel = instance.BeginJobLevel;
-            defaultController.m_useMotionvecter = instance.UseMotionvector;
             defaultController.m_treeNodeContainer = container;
             defaultController.m_instanceSector = prefabs;
             defaultController.m_gameobject = instanceGameObjects.ToArray();
             defaultController.m_subSectors = uniqueSubSector;
             defaultController.m_instanceData = instanceData;
+            defaultController.m_castShadow = instance.CastShadow;
             string subdirectory = $"{path}/{root.name}";
             //如果需要保存的路径不存在，就创建一个
             if (Directory.Exists(subdirectory) == false)
@@ -358,6 +357,8 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             result.materials = mats;
             result.m_Renderqueue = (RenderQueue)mats[0].renderQueue;
             result.m_castShadow = renderer.shadowCastingMode == ShadowCastingMode.On;
+            var light_mapindex = renderer.lightmapIndex;
+            result.useLightMap = light_mapindex >= 0 && light_mapindex < LightmapSettings.lightmaps.Length;
             return result;
         }
         private static string GetObjectGUID(GameObject gameObject)

@@ -18,8 +18,6 @@ namespace Unity.MergeInstancingSystem.New
     {
         #region SerializableData
         [SerializeField]
-        public float m_cullDistance;
-        [SerializeField]
         public bool m_useJob;
         [SerializeField]
         public TreeNode m_root;
@@ -38,8 +36,6 @@ namespace Unity.MergeInstancingSystem.New
         public InstanceSubSector[] m_subSectors;
         [SerializeField]
         public InstanceData m_instanceData;
-        [SerializeField]
-        public bool m_useMotionvecter;
         [SerializeField]
         public bool m_castShadow;
         #endregion
@@ -205,10 +201,10 @@ namespace Unity.MergeInstancingSystem.New
         /// 遍历树，得到需要做剔除的Gameobject
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public override void UpDateTree(in DPlane* planes, in float3 cameraPos,in float4x4 matrixProj, in float preRelative, in NativeList<JobHandle> taskHandles)
+        public override void UpDateTree(in DPlane* planes, in float3 cameraPos,in float4x4 matrixProj,in NativeList<JobHandle> taskHandles)
         {
             TreeUpdate.Begin();
-            m_root.Update(taskHandles, 0, planes, cameraPos,matrixProj,preRelative);
+            m_root.Update(taskHandles, 0, planes, cameraPos,matrixProj);
             TreeUpdate.End();
         }
         /// <summary>
@@ -233,13 +229,13 @@ namespace Unity.MergeInstancingSystem.New
             SubmitObj.End();
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public override void DispatchDraw(CommandBuffer cmdBuffer, in int passIndex,RenderQueue renderQueue, bool UseMotionVectors)
+        public override void DispatchDraw(CommandBuffer cmdBuffer, in int passIndex,RenderQueue renderQueue)
         {
             RenderingObj.Begin();
             foreach (var instanceSubSector in m_subSectors)
             {
-                if(instanceSubSector.RenderCount == 0)continue;
-                instanceSubSector.DispatchDraw(cmdBuffer,passIndex,renderQueue,m_useMotionvecter&&UseMotionVectors);
+                if(instanceSubSector.renderObjectNumber == 0)continue;
+                instanceSubSector.DispatchDraw(cmdBuffer,passIndex,renderQueue);
             }
             RenderingObj.End();
         }
@@ -251,7 +247,7 @@ namespace Unity.MergeInstancingSystem.New
             RenderingShadow.Begin();
             foreach (var instanceSubSector in m_subSectors)
             {
-                if (instanceSubSector.RenderCount == 0) continue;
+                if (instanceSubSector.renderObjectNumber == 0) continue;
                 instanceSubSector.DispatchDrawShadow(cmdBuffer, passIndex);
             }
             RenderingShadow.End();

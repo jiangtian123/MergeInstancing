@@ -34,7 +34,7 @@ namespace Unity.MergeInstancingSystem.New
         
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public abstract void UpDateTree(in DPlane* planes, in float3 cameraPos, in float4x4 matrixProj,in float preRelative, in NativeList<JobHandle> taskHandles);
+        public abstract void UpDateTree(in DPlane* planes, in float3 cameraPos, in float4x4 matrixProj, in NativeList<JobHandle> taskHandles);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public abstract void InitView(in float3 cameraPos, in float4x4 matrixProj,in DPlane* planes,in NativeList<JobHandle> taskHandles);
@@ -43,7 +43,7 @@ namespace Unity.MergeInstancingSystem.New
         public abstract void DispatchSetup(in NativeList<JobHandle> taskHandles,bool isShadow);
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public abstract void DispatchDraw(CommandBuffer cmdBuffer, in int passIndex,RenderQueue renderQueue,bool UseMotionVectors);
+        public abstract void DispatchDraw(CommandBuffer cmdBuffer, in int passIndex,RenderQueue renderQueue);
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public abstract void DispatchDrawShadow(CommandBuffer cmdBuffer, in int passIndex);
 
