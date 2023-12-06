@@ -67,6 +67,12 @@ namespace Unity.MergeInstancingSystem.New
         /// </summary>
         [NonSerialized]
         private NativeArray<int> m_viewElements;
+
+        private ComputeBuffer m_OriginMatrixBuffer;
+
+        private ComputeBuffer m_PrefabMatrixBuffer;
+
+        private ComputeBuffer m_LightDataBuffer;
         #endregion
 
         #region Profiler
@@ -105,6 +111,7 @@ namespace Unity.MergeInstancingSystem.New
             InitJobTree();
             InitJobElement();
             InitLodData();
+            InitComputeBuffer();
         }
 
         private void InitJobTree()
@@ -128,6 +135,7 @@ namespace Unity.MergeInstancingSystem.New
                 element.m_lodLevel = 0;
                 element.m_visible = false;
                 element.m_dataIndex = gameObject.m_dataIndex;
+                element.m_lightDataIndex = gameObject.m_lightDataIndex;
                 m_instanceEle[i] = element;
             }
 
@@ -141,10 +149,10 @@ namespace Unity.MergeInstancingSystem.New
             scatterJob.treeElements = (DElement*)m_instanceEle.GetUnsafePtr();
             scatterJob.boxs = (DAABB*)boxs.GetUnsafePtr();
             NativeArray<Matrix4x4> matrix4x4s =
-                new NativeArray<Matrix4x4>(m_instanceData.m_gameObjectData.Count, Allocator.TempJob);
-            for (int i = 0; i < m_instanceData.m_gameObjectData.Count; i++)
+                new NativeArray<Matrix4x4>(m_instanceData.m_gameObjectMatrix.Count, Allocator.TempJob);
+            for (int i = 0; i < m_instanceData.m_gameObjectMatrix.Count; i++)
             {
-                matrix4x4s[i] = m_instanceData.m_gameObjectData[i].m_LodData[0].originMatrix[0];
+                matrix4x4s[i] = m_instanceData.m_gameObjectMatrix[i];
             }
             scatterJob.matrix = (Matrix4x4*)matrix4x4s.GetUnsafePtr();
 
@@ -164,12 +172,54 @@ namespace Unity.MergeInstancingSystem.New
             }
         }
 
+        private void InitComputeBuffer()
+        {
+            m_OriginMatrixBuffer = new ComputeBuffer(m_instanceData.m_gameobjTransform.Count, sizeof(float) * 16*2);
+            m_PrefabMatrixBuffer = new ComputeBuffer(m_instanceData.m_prefabMatrixs.Count, sizeof(float) * 16*2);
+            m_LightDataBuffer = new ComputeBuffer(m_instanceData.m_lightData.Count+1, sizeof(InstanceLightData));
+            
+            NativeArray<MatrixWithInvMatrix> ObjectMatrix = new NativeArray<MatrixWithInvMatrix>(m_instanceData.m_gameobjTransform.Count,Allocator.TempJob);
+            
+            NativeArray<MatrixWithInvMatrix> meshMatrix = new NativeArray<MatrixWithInvMatrix>(m_instanceData.m_prefabMatrixs.Count,Allocator.TempJob);
+            
+            
+            NativeArray<Matrix4x4> oM = m_instanceData.m_gameObjectMatrix.ToNativeArray(Allocator.TempJob);
+            NativeArray<Matrix4x4> instanceMeshMatrix = m_instanceData.m_prefabMatrixs.ToNativeArray(Allocator.TempJob);
+            NativeArray<JobHandle> jobHandles = new NativeArray<JobHandle>(2, Allocator.TempJob);
+            
+            DCalculateMatrixInv instanceDataJob = new DCalculateMatrixInv();
+            instanceDataJob.originMatrix = oM;
+            instanceDataJob.matrix_Worlds = ObjectMatrix;
+            
+            
+            DCalculateMatrixInv calculateMatrixInv = new DCalculateMatrixInv();
+            calculateMatrixInv.originMatrix = instanceMeshMatrix;
+            calculateMatrixInv.matrix_Worlds = meshMatrix;
+            
+            jobHandles[0] = instanceDataJob.Schedule(oM.Length, 64);
+            jobHandles[1] = calculateMatrixInv.Schedule(instanceMeshMatrix.Length, 16);
+            JobHandle.CompleteAll(jobHandles);
+            m_OriginMatrixBuffer.SetData(ObjectMatrix);
+            m_PrefabMatrixBuffer.SetData(meshMatrix);
+            m_LightDataBuffer.SetData(m_instanceData.m_lightData);
+            
+            
+            ObjectMatrix.Dispose();
+            meshMatrix.Dispose();
+            oM.Dispose();
+            instanceMeshMatrix.Dispose();
+            jobHandles.Dispose();
+        }
+
         protected override void UnRegiste()
         {
             m_jobGameJectData.Dispose();
             m_rendereringGamerobj.Dispose();
             m_instanceEle.Dispose();
             m_viewElements.Dispose();
+            m_OriginMatrixBuffer.Dispose();
+            m_PrefabMatrixBuffer.Dispose();
+            m_LightDataBuffer.Dispose();
             foreach (var VARIABLE in m_lodInfos)
             {
                 VARIABLE.Dispose();
@@ -224,7 +274,8 @@ namespace Unity.MergeInstancingSystem.New
             {
                 if(!dElement.m_visible) continue;
                 var prefab = m_instanceSector[dElement.m_mark];
-                prefab.DispatchSetup(dElement.m_lodLevel,m_instanceData.GetData(dElement.m_dataIndex),m_subSectors,isShadow);
+                prefab.DispatchSetup(dElement.m_dataIndex, dElement.m_lightDataIndex, dElement.m_lodLevel, m_subSectors,
+                    isShadow);
             }
             SubmitObj.End();
         }
@@ -235,7 +286,7 @@ namespace Unity.MergeInstancingSystem.New
             foreach (var instanceSubSector in m_subSectors)
             {
                 if(instanceSubSector.renderObjectNumber == 0)continue;
-                instanceSubSector.DispatchDraw(cmdBuffer,passIndex,renderQueue);
+                instanceSubSector.DispatchDraw(cmdBuffer,m_OriginMatrixBuffer,m_PrefabMatrixBuffer,m_LightDataBuffer,passIndex,renderQueue);
             }
             RenderingObj.End();
         }
@@ -248,7 +299,7 @@ namespace Unity.MergeInstancingSystem.New
             foreach (var instanceSubSector in m_subSectors)
             {
                 if (instanceSubSector.renderObjectNumber == 0) continue;
-                instanceSubSector.DispatchDrawShadow(cmdBuffer, passIndex);
+                instanceSubSector.DispatchDrawShadow(cmdBuffer, m_OriginMatrixBuffer, m_PrefabMatrixBuffer, passIndex);
             }
             RenderingShadow.End();
         }
@@ -266,6 +317,17 @@ namespace Unity.MergeInstancingSystem.New
             ResetElementState resetElementState = new ResetElementState();
             resetElementState.gameobject = (DElement*)m_instanceEle.GetUnsafePtr();
             resetElementState.Schedule(m_instanceEle.Length,64).Complete();
+        }
+        #endregion
+
+        #region ShaderID
+
+        public class PropertyID
+        {
+            public readonly static int ObjectMatrixID = Shader.PropertyToID("_ObjectMatrixs");
+            public readonly static int MeshMatrixID = Shader.PropertyToID("_MeshMatrixs");
+            public readonly static int LightDataID = Shader.PropertyToID("_InstanceLightDatas");
+            public readonly static int InstanceIndexID = Shader.PropertyToID("_InstanceIndex");
         }
         #endregion
     }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
+using Unity.Collections;
 using Unity.MergeInstancingSystem.CustomData;
 using Unity.MergeInstancingSystem.Pool;
 using UnityEngine;
@@ -16,12 +17,15 @@ namespace Unity.MergeInstancingSystem.New
     {
         [SerializeField]
         public Mesh m_mesh;
+        
         [SerializeField]
         //当前ID对应的Mesh有多少种SubMesh
         public int[] m_subMeshIndex;
+        
         [SerializeField]
         //每种SubMesh对应的材质ID
         public Material[] materials;
+        
         [NonSerialized]
         public PoolID m_poolId;
         [NonSerialized]
@@ -39,8 +43,15 @@ namespace Unity.MergeInstancingSystem.New
 
         [NonSerialized]
         public int renderObjectNumber = 0;
+        
+        
+        [NonSerialized]
+        public ComputeBuffer m_indexBuffer;
 
-        public static int test;
+        [NonSerialized]
+        public Material[] m_runMats;
+        public NativeList<GPUIndex> m_index;
+        
         public int RenderCount
         {
             get
@@ -48,82 +59,100 @@ namespace Unity.MergeInstancingSystem.New
                 return GetPoolCount();
             }
         }
-        
-        
         public void Initialize()
         {
-            m_poolId = InitPool(sectionCount);
+            m_indexBuffer = new ComputeBuffer(sectionCount, sizeof(int)*3);
+            m_index = new NativeList<GPUIndex>(sectionCount, Allocator.Persistent);
+           // m_poolId = InitPool(sectionCount);
             propertyBlock = new MaterialPropertyBlock();
+            m_runMats = new Material[materials.Length];
+            for (int i = 0; i < materials.Length; i++)
+            {
+                m_runMats[i] = new Material(materials[i]);
+            }
         }
         
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DispatchDraw(CommandBuffer cmdBuffer,in int passIndex,RenderQueue renderQueue)
+        public void DispatchDraw(CommandBuffer cmdBuffer,ComputeBuffer objectMatrixBuffer,ComputeBuffer meshMatrixBuffer,ComputeBuffer lightBuffer,in int passIndex,RenderQueue renderQueue)
         {
+            m_indexBuffer.SetData(m_index.AsArray(),0, 0, renderObjectNumber);
             if(m_Renderqueue != renderQueue)return;
-            if (useLightMap)
+            
+            for (int i = 0; i < m_subMeshIndex.Length; i++)
             {
-                var matrix4x4pool = GetMatrix4x4();
-                var lightMapIndexpool = GetlightMapIndex();
-                var lightScalOffsetpool = GetlightMapScaleOffset();
-                var poolCountcount = GetPoolCount();
-                for (int renderCount = 0; renderCount < poolCountcount; renderCount++)
+                Material material = m_runMats[m_subMeshIndex[i]];
+                propertyBlock.Clear();
+                propertyBlock.SetBuffer(TreeNodeController.PropertyID.ObjectMatrixID,objectMatrixBuffer);
+                propertyBlock.SetBuffer(TreeNodeController.PropertyID.MeshMatrixID,meshMatrixBuffer);
+                propertyBlock.SetBuffer(TreeNodeController.PropertyID.LightDataID,lightBuffer);
+                propertyBlock.SetBuffer(TreeNodeController.PropertyID.InstanceIndexID,m_indexBuffer);
+                material.EnableKeyword("CUSTOM_INSTANCING_ON");
+                if (useLightMap)
                 {
-                    var matrixs = matrix4x4pool[renderCount].OnePool;
-                    var lightmapIndex = lightMapIndexpool[renderCount].OnePool;
-                    var ligtmapOffest = lightScalOffsetpool[renderCount].OnePool;
-                    var count = matrix4x4pool[renderCount].length;
-                    for (int i = 0; i < m_subMeshIndex.Length; i++)
-                    {
-                        Material material = materials[m_subMeshIndex[i]];
-                        propertyBlock.Clear();
-                        propertyBlock.SetFloatArray("_lightMapIndex", lightmapIndex);
-                        propertyBlock.SetVectorArray("_LightScaleOffset", ligtmapOffest);
-                        material.shaderKeywords = null;
-                        material.EnableKeyword("CUSTOM_LIGHTMAP_ON");
-                        material.EnableKeyword("CUSTOM_INSTANCING_ON");
-                        cmdBuffer.DrawMeshInstanced(m_mesh, m_subMeshIndex[i], material, passIndex, matrixs, count,
-                            propertyBlock);
-                    }
+                    material.EnableKeyword("CUSTOM_LIGHTMAP_ON");
                 }
+                cmdBuffer.DrawMeshInstancedProcedural(m_mesh,m_subMeshIndex[i],material,0,renderObjectNumber,propertyBlock);
             }
-            else 
-            {
-                var matrix4x4pool = GetMatrix4x4();
-                var poolCountcount = GetPoolCount();
-                for (int renderCount = 0; renderCount < poolCountcount; renderCount++)
-                {
-                    var matrixs = matrix4x4pool[renderCount].OnePool;
-                    var count = matrix4x4pool[renderCount].length;
-                    for (int i = 0; i < m_subMeshIndex.Length; i++)
-                    {
-                        Material material = materials[m_subMeshIndex[i]];
-                        propertyBlock.Clear();
-                        material.shaderKeywords = null;
-                        material.EnableKeyword("CUSTOM_INSTANCING_ON");
-                        cmdBuffer.DrawMeshInstanced(m_mesh, m_subMeshIndex[i], material, passIndex, matrixs, count,
-                            propertyBlock);
-                    }
-                }
-            }
+            // if (useLightMap)
+            // {
+            //     var matrix4x4pool = GetMatrix4x4();
+            //     var lightMapIndexpool = GetlightMapIndex();
+            //     var lightScalOffsetpool = GetlightMapScaleOffset();
+            //     var poolCountcount = GetPoolCount();
+            //     for (int renderCount = 0; renderCount < poolCountcount; renderCount++)
+            //     {
+            //         var matrixs = matrix4x4pool[renderCount].OnePool;
+            //         var lightmapIndex = lightMapIndexpool[renderCount].OnePool;
+            //         var ligtmapOffest = lightScalOffsetpool[renderCount].OnePool;
+            //         var count = matrix4x4pool[renderCount].length;
+            //         for (int i = 0; i < m_subMeshIndex.Length; i++)
+            //         {
+            //             Material material = materials[m_subMeshIndex[i]];
+            //             propertyBlock.Clear();
+            //             propertyBlock.SetFloatArray("_lightMapIndex", lightmapIndex);
+            //             propertyBlock.SetVectorArray("_LightScaleOffset", ligtmapOffest);
+            //             material.shaderKeywords = null;
+            //             material.EnableKeyword("CUSTOM_LIGHTMAP_ON");
+            //             material.EnableKeyword("CUSTOM_INSTANCING_ON");
+            //             cmdBuffer.DrawMeshInstanced(m_mesh, m_subMeshIndex[i], material, passIndex, matrixs, count,
+            //                 propertyBlock);
+            //         }
+            //     }
+            // }
+            // else 
+            // {
+            //     var matrix4x4pool = GetMatrix4x4();
+            //     var poolCountcount = GetPoolCount();
+            //     for (int renderCount = 0; renderCount < poolCountcount; renderCount++)
+            //     {
+            //         var matrixs = matrix4x4pool[renderCount].OnePool;
+            //         var count = matrix4x4pool[renderCount].length;
+            //         for (int i = 0; i < m_subMeshIndex.Length; i++)
+            //         {
+            //             Material material = materials[m_subMeshIndex[i]];
+            //             propertyBlock.Clear();
+            //             material.shaderKeywords = null;
+            //             material.EnableKeyword("CUSTOM_INSTANCING_ON");
+            //             cmdBuffer.DrawMeshInstanced(m_mesh, m_subMeshIndex[i], material, passIndex, matrixs, count,
+            //                 propertyBlock);
+            //         }
+            //     }
+            // }
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DispatchDrawShadow(CommandBuffer cmdBuffer,in int passIndex)
+        public void DispatchDrawShadow(CommandBuffer cmdBuffer,ComputeBuffer objectMatrixBuffer,ComputeBuffer meshMatrixBuffer,in int passIndex)
         {
+            m_indexBuffer.SetData(m_index.AsArray(),0, 0, renderObjectNumber);
             if(!m_castShadow)return;
-            var matrix4x4pool = GetMatrix4x4();
-            var poolCountcount = GetPoolCount();
-            for (int renderCount = 0; renderCount < poolCountcount; renderCount++)
+            for (int i = 0; i < m_subMeshIndex.Length; i++)
             {
-                var matrixs = matrix4x4pool[renderCount].OnePool;
-                var count = matrix4x4pool[renderCount].length;
-                for (int i = 0; i < m_subMeshIndex.Length; i++)
-                {
-                    Material material = materials[m_subMeshIndex[i]];
-                    propertyBlock.Clear();
-                    cmdBuffer.DrawMeshInstanced(m_mesh, m_subMeshIndex[i], material, passIndex, matrixs, count,
-                        propertyBlock);
-                }
+                Material material = m_runMats[m_subMeshIndex[i]];
+                propertyBlock.Clear();
+                propertyBlock.SetBuffer(TreeNodeController.PropertyID.ObjectMatrixID,objectMatrixBuffer);
+                propertyBlock.SetBuffer(TreeNodeController.PropertyID.MeshMatrixID,meshMatrixBuffer);
+                propertyBlock.SetBuffer(TreeNodeController.PropertyID.InstanceIndexID,m_indexBuffer);
+                cmdBuffer.DrawMeshInstancedProcedural(m_mesh,m_subMeshIndex[i],material,0,renderObjectNumber,propertyBlock);
             }
         }
         public int GetPoolCount()
@@ -154,15 +183,21 @@ namespace Unity.MergeInstancingSystem.New
             return ID;
         }
 
-        public void AddData(DGameObjectData data,bool isShadow)
+        public void AddData(DGameObjectData data,LodSerializableData serializableData, bool isShadow)
         {
             renderObjectNumber++;
-            PoolManager.Instance.AddData(m_poolId.m_matrix4x4ID,data.originMatrix);
+            PoolManager.Instance.AddData(m_poolId.m_matrix4x4ID,data.m_originMatrixIndex,serializableData.originMatrix);
             if (!isShadow && useLightMap)
             {
-                PoolManager.Instance.AddData(m_poolId.m_lightMapIndexId,data.lightMapIndex);
-                PoolManager.Instance.AddData(m_poolId.m_lightMapScaleOffsetID,data.lightMapOffest);
+                PoolManager.Instance.AddData(m_poolId.m_lightMapIndexId,data.m_Lightindex,serializableData.lightmapIndex);
+                PoolManager.Instance.AddData(m_poolId.m_lightMapScaleOffsetID,data.m_Lightindex,serializableData.lightmapOffest);
             }
+        }
+
+        public void AddData(GPUIndex index)
+        {
+            renderObjectNumber++;
+            m_index.Add(index);
         }
         public bool Equals(InstanceSubSector target)
         {
@@ -184,21 +219,25 @@ namespace Unity.MergeInstancingSystem.New
         public void ResetBuffer()
         {
             renderObjectNumber = 0;
-            PoolManager.Instance.ResetPool<Matrix4x4>(m_poolId.m_matrix4x4ID);
-            if (useLightMap)
-            {
-                PoolManager.Instance.ResetPool<float>(m_poolId.m_lightMapIndexId);
-                PoolManager.Instance.ResetPool<Vector4>(m_poolId.m_lightMapScaleOffsetID);
-            }
+            m_index.Clear();
+            // PoolManager.Instance.ResetPool<Matrix4x4>(m_poolId.m_matrix4x4ID);
+            // if (useLightMap)
+            // {
+            //     PoolManager.Instance.ResetPool<float>(m_poolId.m_lightMapIndexId);
+            //     PoolManager.Instance.ResetPool<Vector4>(m_poolId.m_lightMapScaleOffsetID);
+            // }
         }
         public void Dispose()
         {
-            PoolManager.Instance.ReleasePool<Matrix4x4>(m_poolId.m_matrix4x4ID);
-            if (useLightMap)
-            {
-                PoolManager.Instance.ReleasePool<float>(m_poolId.m_lightMapIndexId);
-                PoolManager.Instance.ReleasePool<Vector4>(m_poolId.m_lightMapScaleOffsetID);
-            }
+            m_indexBuffer.Dispose();
+            m_index.Dispose();
+            m_runMats = null;
+            // PoolManager.Instance.ReleasePool<Matrix4x4>(m_poolId.m_matrix4x4ID);
+            // if (useLightMap)
+            // {
+            //     PoolManager.Instance.ReleasePool<float>(m_poolId.m_lightMapIndexId);
+            //     PoolManager.Instance.ReleasePool<Vector4>(m_poolId.m_lightMapScaleOffsetID);
+            // }
         }
     }
 }

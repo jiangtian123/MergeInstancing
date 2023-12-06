@@ -19,5 +19,8 @@ namespace Unity.MergeInstancingSystem.New
         /// </summary>
         [SerializeField]
         public int m_dataIndex;
+        
+        [SerializeField]
+        public int m_lightDataIndex;
     }
 }

@@ -111,7 +111,6 @@ namespace Unity.MergeInstancingSystem.Render
         }
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
-            
             if (m_CreateEmptyShadowmap)
             {
                 SetEmptyMainLightCascadeShadowmap(ref context);

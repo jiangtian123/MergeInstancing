@@ -14,7 +14,7 @@ using UnityEngine.Profiling;
 namespace Unity.MergeInstancingSystem
 {
 
-   [BurstCompile]
+   //[BurstCompile]
     public unsafe struct TreeNodeUpdateShadowJob : IJob
     {
         [ReadOnly] 
@@ -91,7 +91,7 @@ namespace Unity.MergeInstancingSystem
             }
         }
     }
-   [BurstCompile]
+   //[BurstCompile]
     public unsafe struct ResetElementState : IJobParallelFor
     {
         [NativeDisableUnsafePtrRestriction]
@@ -104,7 +104,7 @@ namespace Unity.MergeInstancingSystem
         }
     }
     
-    [BurstCompile]
+    //[BurstCompile]
     public unsafe struct TreeNodeUpadateJob : IJob
     {
         [ReadOnly] 
@@ -206,7 +206,7 @@ namespace Unity.MergeInstancingSystem
         }
     }
     
-    [BurstCompile]
+    //[BurstCompile]
     public unsafe struct InstanceScatterJob : IJobParallelFor
     {
         [ReadOnly] 
@@ -230,7 +230,7 @@ namespace Unity.MergeInstancingSystem
         }
     }
     
-    [BurstCompile]
+    //[BurstCompile]
     public struct DInstanceDataJob : IJobParallelFor
     {
         [Collections.ReadOnly] 
@@ -243,6 +243,21 @@ namespace Unity.MergeInstancingSystem
             Matrix4x4 matrixWorld = float4x4.TRS(transforms[index].position,
                 transforms[index].rotation, transforms[index].scale);
             matrix_Worlds[index] = matrixWorld;
+        }
+    }
+    public struct DCalculateMatrixInv : IJobParallelFor
+    {
+        [Collections.ReadOnly] 
+        public NativeArray<Matrix4x4> originMatrix;
+        [WriteOnly] 
+        public NativeArray<MatrixWithInvMatrix> matrix_Worlds;
+
+        public void Execute(int index)
+        {
+            MatrixWithInvMatrix tempMatrix = new MatrixWithInvMatrix();
+            tempMatrix.matrix = originMatrix[index];
+            tempMatrix.invmatrix = Matrix4x4.Inverse(originMatrix[index]);
+            matrix_Worlds[index] = tempMatrix;
         }
     }
 }

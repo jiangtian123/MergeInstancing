@@ -36,19 +36,23 @@ namespace Unity.MergeInstancingSystem.New
         public DSphere m_sphers;
         
         /// <summary>
-        /// 存放矩阵和光照数据的Index
+        /// 存放矩阵据的Index
         /// </summary>
         public int m_dataIndex;
+        
+        /// <summary>
+        /// 存放光照数据的Inde
+        /// </summary>
+        public int m_lightDataIndex;
     }
 
     /// <summary>
     /// 因为一个
     /// </summary>
-    public struct DGameObjectData
+    public class DGameObjectData
     {
-        public Matrix4x4 originMatrix;
-        public float lightMapIndex;
-        public Vector4 lightMapOffest;
+        public int m_originMatrixIndex;
+        public int m_Lightindex;
     }
    
 }

@@ -45,10 +45,9 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             List<InstanceGameObject> instanceGameObjects = new List<InstanceGameObject>();
 
             var instanceObjs = GetInstanceGameObj(container);
-            
-            InstanceData instanceData = GetInstanceData(instanceObjs);
             InstancePrefab[] prefabs = GetInstancePrefab(instanceObjs);
             InstanceSubSector[] uniqueSubSector = MergeInstanceSubSectors(prefabs);
+            InstanceData instanceData = GetInstanceData(instanceObjs,prefabs);
             for (int i = 0; i < instanceObjs.Count; i++)
             {
                 instanceGameObjects.Add(instanceObjs[i].insObj);
@@ -162,25 +161,47 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
            
         }
 
-        private InstanceData GetInstanceData( List<TempGameobj> instanceTargets)
+        private InstanceData GetInstanceData( List<TempGameobj> instanceTargets,InstancePrefab[] prefabs)
         {
             InstanceData result = new InstanceData();
-            List<SerializableData> m_gameObjectData = new List<SerializableData>();
+            List<DTransform> m_gameObjectData = new List<DTransform>();
+            List<InstanceLightData> m_lightDataIndex = new List<InstanceLightData>();
             for (int i = 0; i < instanceTargets.Count; i++)
             {
                 var tempObj = instanceTargets[i];
-                tempObj.insObj.m_dataIndex = i;
-                var data = GetSerializableData(tempObj.obj);
-                m_gameObjectData.Add(data);
+                var gamobj = instanceTargets[i].obj.transform;
+                m_gameObjectData.Add(new DTransform(gamobj.position, gamobj.rotation, gamobj.lossyScale));
+                tempObj.insObj.m_dataIndex = m_gameObjectData.Count - 1;
+                tempObj.insObj.m_lightDataIndex = m_lightDataIndex.Count;
+                var datas = getInstanceLightDatas(instanceTargets[i].obj);
+                m_lightDataIndex.AddRange(datas);
             }
 
-            result.m_gameObjectData = m_gameObjectData;
+            List<Matrix4x4> prefabMatrixs = new List<Matrix4x4>();
+            for (int i = 0; i < prefabs.Length; i++)
+            {
+                for (int j = 0; j < prefabs[i].m_lod.Length; j++)
+                {
+                    var mesh = prefabs[i].m_lod[j];
+                    List<int> meshMatrixId = new List<int>();
+                    for (int k = 0; k < mesh.m_meshMatrix.Length; k++)
+                    {
+                        var matrix = mesh.m_meshMatrix[k];
+                        prefabMatrixs.Add(matrix);
+                        meshMatrixId.Add(prefabMatrixs.Count - 1);
+                    }
+                    mesh.m_prefabMatrix = meshMatrixId.ToArray();
+                }
+            }
+            result.m_gameobjTransform = m_gameObjectData;
+            result.m_lightData = m_lightDataIndex;
+            result.m_prefabMatrixs = prefabMatrixs;
             return result;
         }
 
-        private SerializableData GetSerializableData(GameObject gameObject)
+        private List<InstanceLightData> getInstanceLightDatas(GameObject gameObject)
         {
-            SerializableData result = new SerializableData();
+            List<InstanceLightData> result = new List<InstanceLightData>();
             //放每层Lod下的Meshrenderer
             List<List<MeshRenderer>> tempMeshrenderer = new List<List<MeshRenderer>>();
 
@@ -205,27 +226,18 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             //每个meshRenderers 是一种lod下的所有meshrenderer
             foreach (var meshRenderers in tempMeshrenderer)
             {
-                List<DTransform> localToworld = new List<DTransform>();
-                List<float> lightmapIndex = new List<float>();
-                List<Vector4> lisghtmapOffest = new List<Vector4>();
                 foreach (var meshRenderer in meshRenderers)
                 {
-                    localToworld.Add(new DTransform(meshRenderer.transform.position,meshRenderer.transform.rotation,meshRenderer.transform.lossyScale));
+                    InstanceLightData lightData = new InstanceLightData();
                     var light_mapindex = meshRenderer.lightmapIndex;
                     if (light_mapindex >= 0 && light_mapindex < LightmapSettings.lightmaps.Length)
                     {
-                        lightmapIndex.Add((float)light_mapindex);
-                        lisghtmapOffest.Add(meshRenderer.lightmapScaleOffset);
+                        lightData.m_lightIndex = light_mapindex;
+                        lightData.m_lightOffest = meshRenderer.lightmapScaleOffset;
+                        result.Add(lightData);
                     }
                 }
-
-                LodSerializableData temp = new LodSerializableData();
-                temp.transforms = localToworld.ToArray();
-                temp.lightmapIndex = lightmapIndex.ToArray();
-                temp.lightmapOffest = lisghtmapOffest.ToArray();
-                tempLodData.Add(temp);
             }
-            result.m_LodData = tempLodData.ToArray();
             return result;
         }
 
@@ -324,20 +336,31 @@ namespace Unity.MergeInstancingSystem.InstanceBuild
             {
                 tempMatrix.Add(Matrix4x4.TRS(mRender.transform.localPosition,mRender.transform.localRotation,mRender.transform.localScale));
                 subSectors.Add(GetInstanceSubSector(mRender));
+                
             }
-
             result.m_subSectors = subSectors.ToArray();
+            result.m_meshMatrix = tempMatrix.ToArray();
             return result;
         }
         private InstanceSector GetInstanceSector(List<MeshRenderer> meshRenderers,GameObject root)
         {
             InstanceSector result = new InstanceSector();
             List<InstanceSubSector> subSectors = new List<InstanceSubSector>();
+            List<Matrix4x4> meshMatrixs = new List<Matrix4x4>();
             foreach (var mRender in meshRenderers)
             {
                 subSectors.Add(GetInstanceSubSector(mRender));
+                if (mRender.gameObject != root)
+                {
+                    meshMatrixs.Add(Matrix4x4.TRS(mRender.transform.localPosition,mRender.transform.localRotation,mRender.transform.localScale));
+                }
+                else
+                {
+                    meshMatrixs.Add(Matrix4x4.identity);
+                }
             }
             result.m_subSectors = subSectors.ToArray();
+            result.m_meshMatrix = meshMatrixs.ToArray();
             return result;
         }
         

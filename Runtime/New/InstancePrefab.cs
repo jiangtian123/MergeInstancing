@@ -27,13 +27,14 @@ namespace Unity.MergeInstancingSystem.New
         /// </summary>
         [SerializeField]
         public List<float> m_LODInfos;
+
         /// <summary>
         /// 根据Lod级别准备需要渲染的数据
         /// </summary>
         /// <param name="lodLevel"></param>
         /// <param name="gameObjectData"></param>
-        
-        public void DispatchSetup(int lodLevel,SerializableData serializableData,InstanceSubSector[] instanceSubSectors,bool isShadow)
+        private DGameObjectData gameObjectData = new DGameObjectData();
+        public void DispatchSetup(int  objMatrixIndex,int lightDataHead,int lodLevel,InstanceSubSector[] instanceSubSectors,bool isShadow)
         {
             if (lodLevel >= m_lod.Length)
             {
@@ -45,21 +46,20 @@ namespace Unity.MergeInstancingSystem.New
                 return;
             }
             var sector = m_lod[lodLevel];
-            var lodSerializable = serializableData.m_LodData[lodLevel];
             int number = 0;
             for (int i = 0; i < sector.MeshCount; i++)
             {
+                
                 var subsectorIndex = sector.m_meshs[i];
+                var meshMatrixindex = sector.m_prefabMatrix[i];
                 var subsector = instanceSubSectors[subsectorIndex];
-                DGameObjectData gameObjectData = new DGameObjectData();
-                gameObjectData.originMatrix = lodSerializable.originMatrix[i];
+                int lightDataIndex = -1;
                 if (!isShadow && subsector.useLightMap)
                 {
-                    gameObjectData.lightMapIndex = lodSerializable.lightmapIndex[number];
-                    gameObjectData.lightMapOffest = lodSerializable.lightmapOffest[number];
-                    number++;
+                    lightDataIndex = lightDataHead + number;
                 }
-                subsector.AddData(gameObjectData,isShadow);
+                GPUIndex index = new GPUIndex(objMatrixIndex,meshMatrixindex,lightDataIndex);
+                subsector.AddData(index);
             }
         }
     }

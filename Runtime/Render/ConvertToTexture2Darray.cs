@@ -39,7 +39,7 @@ namespace Unity.MergeInstancingSystem.Render
         private void ConvertToTexture2DArray()
         {
             LightmapData[] lightmaps =  LightmapSettings.lightmaps;
-            if (lightmaps == null)
+            if (lightmaps == null || lightmaps.Length == 0)
             {
                 return;
             }

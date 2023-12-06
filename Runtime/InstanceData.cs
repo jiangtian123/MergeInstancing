@@ -13,48 +13,39 @@ using UnityEngine.Rendering.Universal;
 
 namespace Unity.MergeInstancingSystem
 {
+  
+
     [Serializable]
     public class InstanceData : ScriptableObject
     {
+        /// <summary>
+        /// 序列化存的每个Gameobject对应的简化矩阵
+        /// </summary>
         [SerializeField]
-        public List<SerializableData> m_gameObjectData;
+        public List<DTransform> m_gameobjTransform;
+        /// <summary>
+        /// 序列化存的每个Prefab对应的简化矩阵
+        /// </summary>
+        [SerializeField]
+        public List<Matrix4x4> m_prefabMatrixs;
+        [SerializeField]
+        public List<InstanceLightData> m_lightData;
+        
+        [NonSerialized]
+        public List<Matrix4x4> m_gameObjectMatrix;
         public void Init()
         {
-            List<DTransform> tempTransform = new List<DTransform>();
-            for (int i = 0; i < m_gameObjectData.Count; i++)
-            {
-                for (int j = 0; j < m_gameObjectData[i].m_LodData.Length; j++)
-                {
-                    tempTransform.AddRange(m_gameObjectData[i].m_LodData[j].transforms);
-                }
-            }
-            NativeArray<DTransform> transforms = tempTransform.ToNativeArray(Allocator.TempJob);
-            var result = new NativeArray<Matrix4x4>(transforms.Length, Allocator.TempJob);
+            m_gameObjectMatrix = new List<Matrix4x4>();
+            NativeArray<DTransform> objtransforms = m_gameobjTransform.ToNativeArray(Allocator.TempJob);
+            var pbjresult = new NativeArray<Matrix4x4>(objtransforms.Length, Allocator.TempJob);
+            
             DInstanceDataJob instanceDataJob = new DInstanceDataJob();
-            instanceDataJob.transforms = transforms;
-            instanceDataJob.matrix_Worlds = result;
-            instanceDataJob.Schedule(transforms.Length, 128).Complete();
-            int number = 0;
-            for (int i = 0; i < m_gameObjectData.Count; i++)
-            {
-                for (int j = 0; j < m_gameObjectData[i].m_LodData.Length; j++)
-                {
-                    List<Matrix4x4> tempMatrix = new List<Matrix4x4>();
-                    for (int k = 0; k < m_gameObjectData[i].m_LodData[j].transforms.Length; k++)
-                    {
-                        tempMatrix.Add(result[number++]);
-                    }
-                    m_gameObjectData[i].m_LodData[j].originMatrix = tempMatrix.ToArray();
-                }
-                
-            }
-            transforms.Dispose();
-            result.Dispose();
+            instanceDataJob.transforms = objtransforms;
+            instanceDataJob.matrix_Worlds = pbjresult; 
+            instanceDataJob.Schedule(objtransforms.Length, 128).Complete();
+            m_gameObjectMatrix.AddRange(pbjresult.ToArray());
+            objtransforms.Dispose();
+            pbjresult.Dispose();
         }
-        public SerializableData GetData(int index)
-        {
-            return m_gameObjectData[index];
-        }
-        
     }
 }
