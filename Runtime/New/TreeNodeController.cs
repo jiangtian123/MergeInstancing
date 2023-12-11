@@ -23,9 +23,6 @@ namespace Unity.MergeInstancingSystem.New
         public TreeNode m_root;
         [SerializeField]
         public int m_jobBeginLevel;
-        /// <summary>
-        /// 存放树的list
-        /// </summary>
         [SerializeField]
         public TreeNodeContainer m_treeNodeContainer;
         [SerializeField]
@@ -67,20 +64,24 @@ namespace Unity.MergeInstancingSystem.New
         /// </summary>
         [NonSerialized]
         private NativeArray<int> m_viewElements;
-
+        [NonSerialized]
         private ComputeBuffer m_OriginMatrixBuffer;
-
+        [NonSerialized]
         private ComputeBuffer m_PrefabMatrixBuffer;
-
+        [NonSerialized]
         private ComputeBuffer m_LightDataBuffer;
         #endregion
 
         #region Profiler
-        
+        [NonSerialized]
         UnityEngine.Profiling.CustomSampler ShadowCull;
+        [NonSerialized]
         UnityEngine.Profiling.CustomSampler TreeUpdate;
+        [NonSerialized]
         UnityEngine.Profiling.CustomSampler SubmitObj;
+        [NonSerialized]
         UnityEngine.Profiling.CustomSampler RenderingObj;
+        [NonSerialized]
         UnityEngine.Profiling.CustomSampler RenderingShadow;
 
         #endregion

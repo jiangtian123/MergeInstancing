@@ -19,12 +19,18 @@
     #define UNITY_GET_INSTANCE_ID(input)    input.instanceID
 #endif
 
-#define UNITY_TRANSFER_INSTANCE_ID(input, output)   output.instanceID = UNITY_GET_INSTANCE_ID(input)
+#ifndef UNITY_TRANSFER_INSTANCE_ID
+    #define UNITY_TRANSFER_INSTANCE_ID(input, output)   output.instanceID = UNITY_GET_INSTANCE_ID(input)
+#endif
+
+#if !defined(UNITY_VERTEX_INPUT_INSTANCE_ID)
+#   define UNITY_VERTEX_INPUT_INSTANCE_ID DEFAULT_UNITY_VERTEX_INPUT_INSTANCE_ID
+#endif
 
 #ifdef CUSTOM_INSTANCING_ON
-    
     #define GetVertexData(vertexInputn,positionOs) vertexInput = GetInstancePositionInputs(positionOs); 
-    #define OBJECT_TO_WORLD_MATRIX InstanceGetObjectToWorldMatrix();
+    #define OBJECT_TO_WORLD_MATRIX InstanceGetObjectToWorldMatrix()
+    #define WORLD_TO_OBJECT_MATRIX InstanceGetWorldToObjectMatrix()
     #define CUSTOM_SETUP_INSTANCE_ID(input) SetUpInstanceId(UNITY_GET_INSTANCE_ID(input));
     #define GetVertexNormal(normalInput,normalOs) normalInput = GetInstanceVertexNormalInputs(normalOs);
     #define GetVertexNormalWithTang(normalInput,normalOs,tangentOS) normalInput = GetInstanceVertexNormalInputs(normalOs,tangentOS);
@@ -38,13 +44,14 @@
     #else
         #define LIGHTMAP_OR_SH(lmName, shName, index)   half3 shName : TEXCOORD##index
         #define GETLIGHTMAP_UV(staticLmName, shName)
-        #define CUSTOM_SAMPLE_GI(staticLmName, shName, normalWSName)  InstanceSampleSHPixel(normalWSName)
+        #define CUSTOM_SAMPLE_GI(staticLmName, shName, normalWSName) InstanceSampleSHPixel(shName,normalWSName)
         #define GETOUTPUT_SH(normalWS, OUT)  OUT.xyz = InstanceSampleShVertex(normalWS)
         #define CUSTOM_SAMPLE_SHADOWMASK(uv) half4(1, 1, 1, 1)
     #endif
 #else
     #define GetVertexData(vertexInput,positionOs) vertexInput = GetVertexPositionInputs(positionOs);
-    #define OBJECT_TO_WORLD_MATRIX GetObjectToWorldMatrix();
+    #define OBJECT_TO_WORLD_MATRIX GetObjectToWorldMatrix()
+    #define WORLD_TO_OBJECT_MATRIX GetWorldToObjectMatrix()
     #define CUSTOM_SETUP_INSTANCE_ID(input) UNITY_SETUP_INSTANCE_ID(input)
     #define GetVertexNormal(normalInput,normalOs) normalInput = GetVertexNormalInputs(normalOs);
     #define GetVertexNormalWithTang(normalInput,normalOs,tangentOS) normalInput = GetVertexNormalInputs(normalOs,tangentOS);

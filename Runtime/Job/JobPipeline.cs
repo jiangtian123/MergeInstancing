@@ -245,6 +245,7 @@ namespace Unity.MergeInstancingSystem
             matrix_Worlds[index] = matrixWorld;
         }
     }
+    //[BurstCompile]
     public struct DCalculateMatrixInv : IJobParallelFor
     {
         [Collections.ReadOnly] 

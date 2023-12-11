@@ -92,7 +92,7 @@ namespace Unity.MergeInstancingSystem.New
                 {
                     material.EnableKeyword("CUSTOM_LIGHTMAP_ON");
                 }
-                cmdBuffer.DrawMeshInstancedProcedural(m_mesh,m_subMeshIndex[i],material,0,renderObjectNumber,propertyBlock);
+                //cmdBuffer.DrawMeshInstancedProcedural(m_mesh,m_subMeshIndex[i],material,0,renderObjectNumber,propertyBlock);
             }
             // if (useLightMap)
             // {
@@ -152,7 +152,7 @@ namespace Unity.MergeInstancingSystem.New
                 propertyBlock.SetBuffer(TreeNodeController.PropertyID.ObjectMatrixID,objectMatrixBuffer);
                 propertyBlock.SetBuffer(TreeNodeController.PropertyID.MeshMatrixID,meshMatrixBuffer);
                 propertyBlock.SetBuffer(TreeNodeController.PropertyID.InstanceIndexID,m_indexBuffer);
-                cmdBuffer.DrawMeshInstancedProcedural(m_mesh,m_subMeshIndex[i],material,0,renderObjectNumber,propertyBlock);
+                //cmdBuffer.DrawMeshInstancedProcedural(m_mesh,m_subMeshIndex[i],material,0,renderObjectNumber,propertyBlock);
             }
         }
         public int GetPoolCount()

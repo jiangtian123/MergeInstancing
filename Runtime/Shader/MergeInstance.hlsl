@@ -3,7 +3,6 @@
 
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/UnityInstancing.hlsl"
 float4 instance_SHAr;
 float4 instance_SHAg;
 float4 instance_SHAb;
@@ -142,17 +141,41 @@ void SampleDirectionalLightmap(TEXTURE2D_LIGHTMAP_PARAM(lightmapTex, lightmapSam
     backBakeDiffuseLighting += illuminance * backHalfLambert / max(1e-4, direction.w);
 }
 
-half3 InstanceSampleSHPixel(half3 normalWS)
+half3 InstanceSampleSHPixel(half3 L2Term,half3 normalWS)
 {
-    half3 res = SHEvalLinearL0L1(normalWS, instance_SHAr, instance_SHAg, instance_SHAb);
+    #if defined(EVALUATE_SH_VERTEX)
+        return L2Term;
+    #elif defined(EVALUATE_SH_MIXED)
+        half3 res = SHEvalLinearL0L1(normalWS, unity_SHAr, unity_SHAg, unity_SHAb);
     #ifdef UNITY_COLORSPACE_GAMMA
     res = LinearToSRGB(res);
     #endif
-    return res;
+        return max(half3(0, 0, 0), res);
+    #endif
+    return SampleSH(normalWS);
 }
-
-half3 InstanceSampleShVertex(float3 normal)
+half3 CuntomSampleSH(half3 normalWS)
 {
+    // LPPV is not supported in Ligthweight Pipeline
+    real4 SHCoefficients[7];
+    SHCoefficients[0] = unity_SHAr;
+    SHCoefficients[1] = unity_SHAg;
+    SHCoefficients[2] = unity_SHAb;
+    SHCoefficients[3] = unity_SHBr;
+    SHCoefficients[4] = unity_SHBg;
+    SHCoefficients[5] = unity_SHBb;
+    SHCoefficients[6] = unity_SHC;
+
+    return max(half3(0, 0, 0), SampleSH9(SHCoefficients, normalWS));
+}
+half3 InstanceSampleShVertex(float3 normalWS)
+{
+    #if defined(EVALUATE_SH_VERTEX)
+    return CuntomSampleSH(normalWS);
+    #elif defined(EVALUATE_SH_MIXED)
+    // no max since this is only L2 contribution
+    return SHEvalLinearL2(normalWS, unity_SHBr, unity_SHBg, unity_SHBb, unity_SHC);
+    #endif
     return half3(0,0,0);
 }
 

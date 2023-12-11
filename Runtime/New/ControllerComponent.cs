@@ -12,8 +12,15 @@ namespace Unity.MergeInstancingSystem.New
     public unsafe abstract class ControllerComponent : MonoBehaviour
     {
         internal static List<ControllerComponent> instanceComponents = new List<ControllerComponent>(8);
+        protected static bool SupportStructBuffer;
         void OnEnable()
         {
+            bool instanceSupport =  SystemInfo.supportsInstancing;
+            long maxGraphicsBufferSize = SystemInfo.maxGraphicsBufferSize;
+            SupportStructBuffer = instanceSupport && SystemInfo.maxComputeBufferInputsVertex > 0;
+            Debug.Log($"Max SSBO Size is {maxGraphicsBufferSize}");
+            Debug.Log($"Max Vertex Support SSBO Count is {SystemInfo.maxComputeBufferInputsVertex}");
+            Debug.Log($"SructBuffer Support is {SupportStructBuffer}");
             instanceComponents.Add(this);
             OnRegiste();
         }
