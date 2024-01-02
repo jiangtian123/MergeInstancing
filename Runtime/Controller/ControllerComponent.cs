@@ -3,24 +3,22 @@ using System.Runtime.CompilerServices;
 using Unity.Collections;
 using Unity.Jobs;
 using Unity.Mathematics;
-using Unity.MergeInstancingSystem.CustomData;
 using UnityEngine;
 using UnityEngine.Rendering;
 
-namespace Unity.MergeInstancingSystem.New
+namespace Unity.MergeInstancingSystem
 {
     public unsafe abstract class ControllerComponent : MonoBehaviour
     {
         internal static List<ControllerComponent> instanceComponents = new List<ControllerComponent>(8);
-        protected static bool SupportStructBuffer;
+        protected static bool SupportInstance;
+        protected const int CONSTANTBUFFERSIZE = 16384;
+        private static NativeQueue<byte> AviodBugQueue;
         void OnEnable()
         {
-            bool instanceSupport =  SystemInfo.supportsInstancing;
-            long maxGraphicsBufferSize = SystemInfo.maxGraphicsBufferSize;
-            SupportStructBuffer = instanceSupport && SystemInfo.maxComputeBufferInputsVertex > 0;
-            Debug.Log($"Max SSBO Size is {maxGraphicsBufferSize}");
-            Debug.Log($"Max Vertex Support SSBO Count is {SystemInfo.maxComputeBufferInputsVertex}");
-            Debug.Log($"SructBuffer Support is {SupportStructBuffer}");
+            SupportInstance = SystemInfo.maxGraphicsBufferSize > CONSTANTBUFFERSIZE;
+            //这里初始化一个NativeQueue,根据之前东哥测试的结果看，闪退的原因是俩个Job在new 一个 queue的时候，QueuePool的初始化出了问题，所以在外部线程里先new一个。
+            AviodBugQueue = new NativeQueue<byte>(Allocator.Temp);
             instanceComponents.Add(this);
             OnRegiste();
         }
@@ -38,14 +36,9 @@ namespace Unity.MergeInstancingSystem.New
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public abstract void UpDateTreeWithShadow(in DPlane* planes,in NativeList<JobHandle> taskHandles);
         
-        
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public abstract void UpDateTree(in DPlane* planes, in float3 cameraPos, in float4x4 matrixProj, in NativeList<JobHandle> taskHandles);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public abstract void InitView(in float3 cameraPos, in float4x4 matrixProj,in DPlane* planes,in NativeList<JobHandle> taskHandles);
-
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public abstract void DispatchSetup(in NativeList<JobHandle> taskHandles,bool isShadow);
         

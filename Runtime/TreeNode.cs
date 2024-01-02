@@ -4,11 +4,10 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
-using Unity.MergeInstancingSystem.CustomData;
 using Unity.MergeInstancingSystem.Utils;
 using UnityEngine;
 
-namespace Unity.MergeInstancingSystem.New
+namespace Unity.MergeInstancingSystem
 {
     [Serializable]
     public class TreeNode
@@ -37,9 +36,13 @@ namespace Unity.MergeInstancingSystem.New
         [SerializeField]
         public bool hasChild;
 
+        [NonSerialized] 
+        private NativeQueue<int> jobQueue;
+
         public void Initialize(TreeNodeController controller)
         {
             m_controller = controller;
+            jobQueue = new NativeQueue<int>(Allocator.Persistent);
             for (int i = 0; i < m_childTreeNodeIds.Count; ++i)
             {
                 var childTreeNode = m_container.Get(m_childTreeNodeIds[i]);
@@ -57,6 +60,7 @@ namespace Unity.MergeInstancingSystem.New
                 treeNodeUpdateShadowJob.treeNodes = (JobTreeData*)m_controller.m_jobGameJectData.GetUnsafePtr();
                 treeNodeUpdateShadowJob.root = index;
                 treeNodeUpdateShadowJob.instanceElements =  (DElement*)m_controller.m_instanceEle.GetUnsafePtr();
+                treeNodeUpdateShadowJob.spaceNodes = jobQueue;
                 taskJobHandles.Add(treeNodeUpdateShadowJob.Schedule());
                 return;
             }
@@ -112,6 +116,7 @@ namespace Unity.MergeInstancingSystem.New
                 upadataJob.lodNumbers = m_controller.m_lodNumber;
                 upadataJob.instanceElements = (DElement*)m_controller.m_instanceEle.GetUnsafePtr();
                 upadataJob.lodInfos = m_controller.m_lodPtr;
+                upadataJob.spaceNodes = jobQueue;
                 taskJobHandles.Add(upadataJob.Schedule());
                 return;
             }
@@ -159,6 +164,7 @@ namespace Unity.MergeInstancingSystem.New
         }
         public void Dispose()
         {
+            jobQueue.Dispose();
             for (int i = 0; i < m_childTreeNodeIds.Count; i++)
             {
                 int childIndex = m_childTreeNodeIds[i];

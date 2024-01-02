@@ -1,8 +1,8 @@
 ﻿using System;
-using Unity.MergeInstancingSystem.CustomData;
+using Unity.MergeInstancingSystem;
 using UnityEngine;
 
-namespace Unity.MergeInstancingSystem.New
+namespace Unity.MergeInstancingSystem
 {
     [Serializable]
     public class LodSerializableData

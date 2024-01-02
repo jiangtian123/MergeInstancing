@@ -6,41 +6,20 @@
 float4 instance_SHAr;
 float4 instance_SHAg;
 float4 instance_SHAb;
-struct InstanceLightData
-{
-    float4 _LightMapOffest;
-    float _lightMapIndex;
-};
-struct InstanceDataIndex
-{
-    int ObjMatrixIndex;
-    int MeshMatrixIndex;
-    int LightDataIndex;
-};
-
-struct ObjectMatrix
-{
-    float4x4 objectMatrix;
-    float4x4 objectMatrixI;
-};
-
-struct MeshMatrix
-{
-    float4x4 meshMatrix;
-    float4x4 meshMatrixI;
-};
-StructuredBuffer<ObjectMatrix> _ObjectMatrixs;
-StructuredBuffer<MeshMatrix> _MeshMatrixs;
-StructuredBuffer<InstanceLightData> _InstanceLightDatas;
-StructuredBuffer<InstanceDataIndex> _InstanceIndex;
+Texture2D<float4> _Matrixs;
+Texture2D<float4> _LightMapOffest;
+//x 是矩阵的索引，y是光照offest，z 是lightmap的索引
+CBUFFER_START(InstanceIndexBuffer)
+    float4 _dataIndexAndLightIndex[1024];
+CBUFFER_END
 
 TEXTURE2D_ARRAY(_InstanceLightMapArray);        SAMPLER(sampler_InstanceLightMapArray);
 TEXTURE2D_ARRAY(_InstanceShadowMaskArray);      SAMPLER(sampler_InstanceShadowMaskArray);
 
 static uint _instanceId;
 
-#define LightScaleOffset _InstanceLightDatas[_InstanceIndex[_instanceId].LightDataIndex]._LightMapOffest
-#define LightMapIndex _InstanceLightDatas[_InstanceIndex[_instanceId].LightDataIndex]._lightMapIndex
+#define LightScaleOffset _LightMapOffest[float2(0,_dataIndexAndLightIndex[_instanceId].y)]
+#define LightMapIndex _dataIndexAndLightIndex[_instanceId].z
 #define LIGHTMAP_NAME _InstanceLightMapArray
 #define LIGHTMAP_INDIRECTION_NAME unity_LightmapsInd
 #define LIGHTMAP_SAMPLER_NAME sampler_InstanceLightMapArray
@@ -54,17 +33,23 @@ void SetUpInstanceId(uint inputInstanceID)
 
 float4x4 InstanceGetObjectToWorldMatrix()
 {
-    InstanceDataIndex _index = _InstanceIndex[_instanceId];
-    float4x4 oM = _ObjectMatrixs[_index.ObjMatrixIndex].objectMatrix;
-    float4x4 meshMatrix = _MeshMatrixs[_index.MeshMatrixIndex].meshMatrix;
-    return mul(oM,meshMatrix);
+    int matrixIndex = _dataIndexAndLightIndex[_instanceId].x;
+    float4x4 objectToWorld;
+    objectToWorld[0] = _Matrixs[float2(0,matrixIndex)];
+    objectToWorld[1] = _Matrixs[float2(1,matrixIndex)];
+    objectToWorld[2] = _Matrixs[float2(2,matrixIndex)];
+    objectToWorld[3] = _Matrixs[float2(3,matrixIndex)];
+    return objectToWorld;
 }
 float4x4 InstanceGetWorldToObjectMatrix()
 {
-    InstanceDataIndex _index = _InstanceIndex[_instanceId];
-    float4x4 oM = _ObjectMatrixs[_index.ObjMatrixIndex].objectMatrixI;
-    float4x4 meshMatrix = _MeshMatrixs[_index.MeshMatrixIndex].meshMatrixI;
-    return mul(meshMatrix,oM);
+    int matrixIndex = _dataIndexAndLightIndex[_instanceId].x;
+    float4x4 worldToObject;
+    worldToObject[0] = _Matrixs[float2(4,matrixIndex)];
+    worldToObject[1] = _Matrixs[float2(5,matrixIndex)];
+    worldToObject[2] = _Matrixs[float2(6,matrixIndex)];
+    worldToObject[3] = _Matrixs[float2(7,matrixIndex)];
+    return worldToObject;
 }
 float3 InstanceTransformObjectToWorldDir(float3 dirOS, bool doNormalize = true)
 {

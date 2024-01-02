@@ -2,19 +2,9 @@
 using System.Collections.Generic;
 using Unity.Collections;
 using Unity.Jobs;
-using Unity.Mathematics;
-using Unity.MergeInstancingSystem.CustomData;
-using Unity.MergeInstancingSystem.New;
-using Unity.MergeInstancingSystem.Utils;
-using UnityEditor;
 using UnityEngine;
-using UnityEngine.Rendering;
-using UnityEngine.Rendering.Universal;
-
 namespace Unity.MergeInstancingSystem
 {
-  
-
     [Serializable]
     public class InstanceData : ScriptableObject
     {
@@ -23,22 +13,44 @@ namespace Unity.MergeInstancingSystem
         /// </summary>
         [SerializeField]
         public List<DTransform> m_gameobjTransform;
-        /// <summary>
-        /// 序列化存的每个Prefab对应的简化矩阵
-        /// </summary>
+        [NonSerialized]
+        public Texture2D m_matrixs;
+        [NonSerialized]
+        public Texture2D m_lightMapOffest;
         [SerializeField]
-        public List<Matrix4x4> m_prefabMatrixs;
+        public TextAsset m_byteMatrixTexture;
         [SerializeField]
-        public List<InstanceLightData> m_lightData;
+        public int matrixTextureW;
+        [SerializeField]
+        public int matrixTextureH;
+        [SerializeField]
+        public int OffestTextureW;
+        [SerializeField]
+        public int OffestTextureH;
         
+        [SerializeField]
+        public TextAsset m_byteLightOffestTexture;
+        [SerializeField]
+        public List<int> m_lightMapIndex;
         [NonSerialized]
         public List<Matrix4x4> m_gameObjectMatrix;
         public void Init()
         {
+            TextureFormat format = TextureFormat.RGBAFloat;
+            m_matrixs= new Texture2D(matrixTextureW, matrixTextureH,format,false);
+            byte[] matrixData = m_byteMatrixTexture.bytes;
+            m_matrixs.LoadRawTextureData(matrixData);
+            m_matrixs.Apply();
+            
+            byte[] lightData = m_byteLightOffestTexture.bytes;
+            m_lightMapOffest= new Texture2D(OffestTextureW, OffestTextureH,format,false);
+            m_lightMapOffest.LoadRawTextureData(lightData);
+            m_lightMapOffest.Apply();
+            
+            
             m_gameObjectMatrix = new List<Matrix4x4>();
             NativeArray<DTransform> objtransforms = m_gameobjTransform.ToNativeArray(Allocator.TempJob);
             var pbjresult = new NativeArray<Matrix4x4>(objtransforms.Length, Allocator.TempJob);
-            
             DInstanceDataJob instanceDataJob = new DInstanceDataJob();
             instanceDataJob.transforms = objtransforms;
             instanceDataJob.matrix_Worlds = pbjresult; 

@@ -1,7 +1,7 @@
 ﻿using System;
 using UnityEngine;
 
-namespace Unity.MergeInstancingSystem.New
+namespace Unity.MergeInstancingSystem
 {
     /// <summary>
     /// 场景中的gameobject的代理
@@ -15,11 +15,13 @@ namespace Unity.MergeInstancingSystem.New
         [SerializeField]
         public int m_prefabIndex;
         /// <summary>
-        /// 对应的矩阵和光照数据的地方
+        /// 矩阵数据的索引
         /// </summary>
         [SerializeField]
         public int m_dataIndex;
-        
+        /// <summary>
+        /// 光照数据的索引
+        /// </summary>
         [SerializeField]
         public int m_lightDataIndex;
     }

@@ -1,7 +1,7 @@
 ﻿using TreeEditor;
 using UnityEditor;
 using UnityEngine;
-using TreeNode = Unity.MergeInstancingSystem.New.TreeNode;
+using TreeNode = Unity.MergeInstancingSystem;
 
 namespace Unity.MergeInstancingSystem
 {

@@ -3,8 +3,6 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
-using Unity.MergeInstancingSystem.CustomData;
-using Unity.MergeInstancingSystem.New;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Profiling;
@@ -64,12 +62,6 @@ namespace Unity.MergeInstancingSystem.Render
             taskHandles.Clear();
             for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
             {
-                ControllerComponent.instanceComponents[i].InitView(viewOrigin,matrixProj,planesPtr,taskHandles);
-            }
-            JobHandle.CompleteAll(taskHandles);
-            taskHandles.Clear();
-            for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
-            {
                 ControllerComponent.instanceComponents[i].DispatchSetup(taskHandles,false);
             }
             using (new ProfilingScope(cmd, isUseMotionVectors?m_ProfilingRenderInstanceHaveMotionVectors:m_ProfilingRenderInstanceNoMotionVectors))
@@ -82,9 +74,14 @@ namespace Unity.MergeInstancingSystem.Render
                 }
                 for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
                 {
+                    ControllerComponent.instanceComponents[i].DispatchDraw(cmd,0,RenderQueue.AlphaTest);
+                }
+                for (int i = 0; i < ControllerComponent.instanceComponents.Count; i++)
+                {
                     ControllerComponent.instanceComponents[i].DispatchDraw(cmd,0,RenderQueue.Transparent);
                 }
             }
+            //放下面
             Profiler.EndSample();
             taskHandles.Dispose();
             planes.Dispose();

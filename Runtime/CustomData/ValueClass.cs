@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using Unity.MergeInstancingSystem.CustomData;
 
-namespace Unity.MergeInstancingSystem.New
+namespace Unity.MergeInstancingSystem
 {
     [Serializable]
     public struct NodeGameObject

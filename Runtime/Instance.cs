@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Object = UnityEngine.Object;
- using Unity.MergeInstancingSystem.New;
 
  namespace Unity.MergeInstancingSystem
 {

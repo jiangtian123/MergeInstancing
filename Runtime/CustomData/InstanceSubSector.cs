@@ -2,12 +2,13 @@
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using Unity.Collections;
-using Unity.MergeInstancingSystem.CustomData;
+using Unity.Mathematics;
+using Unity.MergeInstancingSystem;
 using Unity.MergeInstancingSystem.Pool;
 using UnityEngine;
 using UnityEngine.Profiling;
 using UnityEngine.Rendering;
-namespace Unity.MergeInstancingSystem.New
+namespace Unity.MergeInstancingSystem
 {
      /// <summary>
     /// 渲染级别的数据
@@ -44,14 +45,14 @@ namespace Unity.MergeInstancingSystem.New
         [NonSerialized]
         public int renderObjectNumber = 0;
         
-        
-        [NonSerialized]
-        public ComputeBuffer m_indexBuffer;
 
         [NonSerialized]
         public Material[] m_runMats;
-        public NativeList<GPUIndex> m_index;
-        
+
+
+        public const int MAXRENDERNUMBER = 1024;
+        public List<Vector4> m_indexBuffer;
+        public List<Vector4> m_tempBuffer;
         public int RenderCount
         {
             get
@@ -61,8 +62,8 @@ namespace Unity.MergeInstancingSystem.New
         }
         public void Initialize()
         {
-            m_indexBuffer = new ComputeBuffer(sectionCount, sizeof(int)*3);
-            m_index = new NativeList<GPUIndex>(sectionCount, Allocator.Persistent);
+            m_indexBuffer = new List<Vector4>(sectionCount);
+            m_tempBuffer = new List<Vector4>();
            // m_poolId = InitPool(sectionCount);
             propertyBlock = new MaterialPropertyBlock();
             m_runMats = new Material[materials.Length];
@@ -74,85 +75,55 @@ namespace Unity.MergeInstancingSystem.New
         
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DispatchDraw(CommandBuffer cmdBuffer,ComputeBuffer objectMatrixBuffer,ComputeBuffer meshMatrixBuffer,ComputeBuffer lightBuffer,in int passIndex,RenderQueue renderQueue)
+        public void DispatchDraw(CommandBuffer cmdBuffer,InstanceData instanceData,in int passIndex,RenderQueue renderQueue)
         {
-            m_indexBuffer.SetData(m_index.AsArray(),0, 0, renderObjectNumber);
             if(m_Renderqueue != renderQueue)return;
-            
             for (int i = 0; i < m_subMeshIndex.Length; i++)
             {
                 Material material = m_runMats[m_subMeshIndex[i]];
                 propertyBlock.Clear();
-                propertyBlock.SetBuffer(TreeNodeController.PropertyID.ObjectMatrixID,objectMatrixBuffer);
-                propertyBlock.SetBuffer(TreeNodeController.PropertyID.MeshMatrixID,meshMatrixBuffer);
-                propertyBlock.SetBuffer(TreeNodeController.PropertyID.LightDataID,lightBuffer);
-                propertyBlock.SetBuffer(TreeNodeController.PropertyID.InstanceIndexID,m_indexBuffer);
+                propertyBlock.SetTexture(TreeNodeController.PropertyID.ObjectMatrixID,instanceData.m_matrixs);
                 material.EnableKeyword("CUSTOM_INSTANCING_ON");
                 if (useLightMap)
                 {
+                    propertyBlock.SetTexture(TreeNodeController.PropertyID.LightData,instanceData.m_lightMapOffest);
                     material.EnableKeyword("CUSTOM_LIGHTMAP_ON");
                 }
-                //cmdBuffer.DrawMeshInstancedProcedural(m_mesh,m_subMeshIndex[i],material,0,renderObjectNumber,propertyBlock);
+                int startIndex = 0;
+                int batchSize = MAXRENDERNUMBER;
+                while (startIndex < renderObjectNumber)
+                {
+                    int endIndex = Mathf.Min(startIndex + batchSize, renderObjectNumber);
+                    m_tempBuffer.AddRange(m_indexBuffer.GetRange(startIndex, endIndex - startIndex));
+                    propertyBlock.SetVectorArray(TreeNodeController.PropertyID.InstanceIndexID, m_tempBuffer);
+                    cmdBuffer.DrawMeshInstancedProcedural(m_mesh, m_subMeshIndex[i], material, passIndex,
+                        renderObjectNumber, propertyBlock);
+                    m_tempBuffer.Clear();
+                    startIndex += batchSize;
+                }
             }
-            // if (useLightMap)
-            // {
-            //     var matrix4x4pool = GetMatrix4x4();
-            //     var lightMapIndexpool = GetlightMapIndex();
-            //     var lightScalOffsetpool = GetlightMapScaleOffset();
-            //     var poolCountcount = GetPoolCount();
-            //     for (int renderCount = 0; renderCount < poolCountcount; renderCount++)
-            //     {
-            //         var matrixs = matrix4x4pool[renderCount].OnePool;
-            //         var lightmapIndex = lightMapIndexpool[renderCount].OnePool;
-            //         var ligtmapOffest = lightScalOffsetpool[renderCount].OnePool;
-            //         var count = matrix4x4pool[renderCount].length;
-            //         for (int i = 0; i < m_subMeshIndex.Length; i++)
-            //         {
-            //             Material material = materials[m_subMeshIndex[i]];
-            //             propertyBlock.Clear();
-            //             propertyBlock.SetFloatArray("_lightMapIndex", lightmapIndex);
-            //             propertyBlock.SetVectorArray("_LightScaleOffset", ligtmapOffest);
-            //             material.shaderKeywords = null;
-            //             material.EnableKeyword("CUSTOM_LIGHTMAP_ON");
-            //             material.EnableKeyword("CUSTOM_INSTANCING_ON");
-            //             cmdBuffer.DrawMeshInstanced(m_mesh, m_subMeshIndex[i], material, passIndex, matrixs, count,
-            //                 propertyBlock);
-            //         }
-            //     }
-            // }
-            // else 
-            // {
-            //     var matrix4x4pool = GetMatrix4x4();
-            //     var poolCountcount = GetPoolCount();
-            //     for (int renderCount = 0; renderCount < poolCountcount; renderCount++)
-            //     {
-            //         var matrixs = matrix4x4pool[renderCount].OnePool;
-            //         var count = matrix4x4pool[renderCount].length;
-            //         for (int i = 0; i < m_subMeshIndex.Length; i++)
-            //         {
-            //             Material material = materials[m_subMeshIndex[i]];
-            //             propertyBlock.Clear();
-            //             material.shaderKeywords = null;
-            //             material.EnableKeyword("CUSTOM_INSTANCING_ON");
-            //             cmdBuffer.DrawMeshInstanced(m_mesh, m_subMeshIndex[i], material, passIndex, matrixs, count,
-            //                 propertyBlock);
-            //         }
-            //     }
-            // }
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DispatchDrawShadow(CommandBuffer cmdBuffer,ComputeBuffer objectMatrixBuffer,ComputeBuffer meshMatrixBuffer,in int passIndex)
+        public void DispatchDrawShadow(CommandBuffer cmdBuffer,InstanceData instanceData,in int passIndex)
         {
-            m_indexBuffer.SetData(m_index.AsArray(),0, 0, renderObjectNumber);
             if(!m_castShadow)return;
             for (int i = 0; i < m_subMeshIndex.Length; i++)
             {
                 Material material = m_runMats[m_subMeshIndex[i]];
                 propertyBlock.Clear();
-                propertyBlock.SetBuffer(TreeNodeController.PropertyID.ObjectMatrixID,objectMatrixBuffer);
-                propertyBlock.SetBuffer(TreeNodeController.PropertyID.MeshMatrixID,meshMatrixBuffer);
-                propertyBlock.SetBuffer(TreeNodeController.PropertyID.InstanceIndexID,m_indexBuffer);
-                //cmdBuffer.DrawMeshInstancedProcedural(m_mesh,m_subMeshIndex[i],material,0,renderObjectNumber,propertyBlock);
+                propertyBlock.SetTexture(TreeNodeController.PropertyID.ObjectMatrixID,instanceData.m_matrixs);
+                int startIndex = 0;
+                int batchSize = MAXRENDERNUMBER;
+                while (startIndex < renderObjectNumber)
+                {
+                    int endIndex = Mathf.Min(startIndex + batchSize, renderObjectNumber);
+                    m_tempBuffer.AddRange(m_indexBuffer.GetRange(startIndex, endIndex - startIndex));
+                    propertyBlock.SetVectorArray(TreeNodeController.PropertyID.InstanceIndexID, m_tempBuffer);
+                    cmdBuffer.DrawMeshInstancedProcedural(m_mesh, m_subMeshIndex[i], material, passIndex,
+                        renderObjectNumber, propertyBlock);
+                    m_tempBuffer.Clear();
+                    startIndex += batchSize;
+                }
             }
         }
         public int GetPoolCount()
@@ -194,10 +165,10 @@ namespace Unity.MergeInstancingSystem.New
             }
         }
 
-        public void AddData(GPUIndex index)
+        public void AddData(float4 index)
         {
             renderObjectNumber++;
-            m_index.Add(index);
+            m_indexBuffer.Add(index);
         }
         public bool Equals(InstanceSubSector target)
         {
@@ -219,7 +190,7 @@ namespace Unity.MergeInstancingSystem.New
         public void ResetBuffer()
         {
             renderObjectNumber = 0;
-            m_index.Clear();
+            m_indexBuffer.Clear();
             // PoolManager.Instance.ResetPool<Matrix4x4>(m_poolId.m_matrix4x4ID);
             // if (useLightMap)
             // {
@@ -229,8 +200,7 @@ namespace Unity.MergeInstancingSystem.New
         }
         public void Dispose()
         {
-            m_indexBuffer.Dispose();
-            m_index.Dispose();
+            m_indexBuffer = null;
             m_runMats = null;
             // PoolManager.Instance.ReleasePool<Matrix4x4>(m_poolId.m_matrix4x4ID);
             // if (useLightMap)

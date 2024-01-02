@@ -1,7 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
-namespace Unity.MergeInstancingSystem.New
+namespace Unity.MergeInstancingSystem
 {
     /// <summary>
     /// 一种Lod一个
@@ -13,26 +14,20 @@ namespace Unity.MergeInstancingSystem.New
         {
             get
             {
-                return m_meshs.Length;
+                return m_subSectors.Length;
             }
         }
         /// <summary>
-        /// 引用的Mesh类型
+        /// 当前Lod在Prefab中前面有几个mesh
         /// </summary>
         [SerializeField]
-        public int[] m_meshs;
-        
+        public int matrixBais;
         /// <summary>
-        /// 每种Mesh在这个Lod中相对于prefab的位置偏移
+        /// 同上，灯光数据的偏移量
         /// </summary>
         [SerializeField]
-        public int[] m_prefabMatrix;
-        
-        //序列化时需要
-        [NonSerialized] 
+        public int lightBais;
+        [SerializeField]
         public InstanceSubSector[] m_subSectors;
-        
-        [NonSerialized]
-        public Matrix4x4[] m_meshMatrix;
     }
 }

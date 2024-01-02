@@ -1,14 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using Unity.MergeInstancingSystem.CustomData;
-using Unity.MergeInstancingSystem.Pool;
-using UnityEngine;
-using UnityEngine.Rendering;
-
-namespace Unity.MergeInstancingSystem.New
+﻿namespace Unity.MergeInstancingSystem
 {
-    
     /// <summary>
     /// 每个Gameobject用来做剔除操作时的替代
     /// </summary>
@@ -36,10 +27,14 @@ namespace Unity.MergeInstancingSystem.New
         public DSphere m_sphers;
         
         /// <summary>
-        /// 存放矩阵据的Index
+        /// 存放剔除矩阵据的Index
         /// </summary>
         public int m_dataIndex;
-        
+
+        /// <summary>
+        /// 存放渲染矩阵的Index
+        /// </summary>
+        public int m_renderDataIndex;
         /// <summary>
         /// 存放光照数据的Inde
         /// </summary>

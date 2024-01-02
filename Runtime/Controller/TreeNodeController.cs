@@ -6,12 +6,11 @@ using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using Unity.Mathematics;
-using Unity.MergeInstancingSystem.CustomData;
 using UnityEngine;
 using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 
-namespace Unity.MergeInstancingSystem.New
+namespace Unity.MergeInstancingSystem
 {
     [Serializable]
     public unsafe class TreeNodeController : ControllerComponent
@@ -20,7 +19,7 @@ namespace Unity.MergeInstancingSystem.New
         [SerializeField]
         public bool m_useJob;
         [SerializeField]
-        public TreeNode m_root;
+        public int m_root;
         [SerializeField]
         public int m_jobBeginLevel;
         [SerializeField]
@@ -43,11 +42,7 @@ namespace Unity.MergeInstancingSystem.New
         /// </summary>
         [NonSerialized]
         public NativeArray<JobTreeData> m_jobGameJectData;
-        /// <summary>
-        /// 记录的是需要做剔除的gameobject
-        /// </summary>
-        [NonSerialized]
-        public NativeList<int> m_rendereringGamerobj;
+
         /// <summary>
         /// 每个Gameobject对应一个DElement
         /// </summary>
@@ -64,12 +59,6 @@ namespace Unity.MergeInstancingSystem.New
         /// </summary>
         [NonSerialized]
         private NativeArray<int> m_viewElements;
-        [NonSerialized]
-        private ComputeBuffer m_OriginMatrixBuffer;
-        [NonSerialized]
-        private ComputeBuffer m_PrefabMatrixBuffer;
-        [NonSerialized]
-        private ComputeBuffer m_LightDataBuffer;
         #endregion
 
         #region Profiler
@@ -96,15 +85,14 @@ namespace Unity.MergeInstancingSystem.New
             RenderingObj = UnityEngine.Profiling.CustomSampler.Create("Rendering Object");
             RenderingShadow = UnityEngine.Profiling.CustomSampler.Create("Rendering Shadow");
             m_jobGameJectData = new NativeArray<JobTreeData>(m_treeNodeContainer.Count, Allocator.Persistent);
-            m_rendereringGamerobj = new NativeList<int>(256, Allocator.Persistent);
             m_instanceEle = new NativeArray<DElement>(m_gameobject.Length, Allocator.Persistent);
             m_viewElements = new NativeArray<int>(m_treeNodeContainer.Count, Allocator.Persistent);
             m_lodInfos = new List<NativeArray<float>>();
             m_lodNumber = new NativeArray<int>(m_instanceSector.Length, Allocator.Persistent);
             m_lodPtr = new NativeArray<IntPtr>(m_instanceSector.Length, Allocator.Persistent);
             m_instanceData.Init();
-            m_root.SetContainer(m_treeNodeContainer);
-            m_root.Initialize(this);
+            m_treeNodeContainer.Get(m_root).SetContainer(m_treeNodeContainer);
+            m_treeNodeContainer.Get(m_root).Initialize(this);
             foreach (var subSector in m_subSectors)
             {
                 subSector.Initialize();
@@ -112,7 +100,6 @@ namespace Unity.MergeInstancingSystem.New
             InitJobTree();
             InitJobElement();
             InitLodData();
-            InitComputeBuffer();
         }
 
         private void InitJobTree()
@@ -135,8 +122,9 @@ namespace Unity.MergeInstancingSystem.New
                 index.Add(element.m_mark);
                 element.m_lodLevel = 0;
                 element.m_visible = false;
-                element.m_dataIndex = gameObject.m_dataIndex;
+                element.m_dataIndex = i;
                 element.m_lightDataIndex = gameObject.m_lightDataIndex;
+                element.m_renderDataIndex = gameObject.m_dataIndex;
                 m_instanceEle[i] = element;
             }
 
@@ -172,63 +160,19 @@ namespace Unity.MergeInstancingSystem.New
                 m_lodPtr[i] = ((IntPtr)lodinfo.GetUnsafePtr());
             }
         }
-
-        private void InitComputeBuffer()
-        {
-            m_OriginMatrixBuffer = new ComputeBuffer(m_instanceData.m_gameobjTransform.Count, sizeof(float) * 16*2);
-            m_PrefabMatrixBuffer = new ComputeBuffer(m_instanceData.m_prefabMatrixs.Count, sizeof(float) * 16*2);
-            m_LightDataBuffer = new ComputeBuffer(m_instanceData.m_lightData.Count+1, sizeof(InstanceLightData));
-            
-            NativeArray<MatrixWithInvMatrix> ObjectMatrix = new NativeArray<MatrixWithInvMatrix>(m_instanceData.m_gameobjTransform.Count,Allocator.TempJob);
-            
-            NativeArray<MatrixWithInvMatrix> meshMatrix = new NativeArray<MatrixWithInvMatrix>(m_instanceData.m_prefabMatrixs.Count,Allocator.TempJob);
-            
-            
-            NativeArray<Matrix4x4> oM = m_instanceData.m_gameObjectMatrix.ToNativeArray(Allocator.TempJob);
-            NativeArray<Matrix4x4> instanceMeshMatrix = m_instanceData.m_prefabMatrixs.ToNativeArray(Allocator.TempJob);
-            NativeArray<JobHandle> jobHandles = new NativeArray<JobHandle>(2, Allocator.TempJob);
-            
-            DCalculateMatrixInv instanceDataJob = new DCalculateMatrixInv();
-            instanceDataJob.originMatrix = oM;
-            instanceDataJob.matrix_Worlds = ObjectMatrix;
-            
-            
-            DCalculateMatrixInv calculateMatrixInv = new DCalculateMatrixInv();
-            calculateMatrixInv.originMatrix = instanceMeshMatrix;
-            calculateMatrixInv.matrix_Worlds = meshMatrix;
-            
-            jobHandles[0] = instanceDataJob.Schedule(oM.Length, 64);
-            jobHandles[1] = calculateMatrixInv.Schedule(instanceMeshMatrix.Length, 16);
-            JobHandle.CompleteAll(jobHandles);
-            m_OriginMatrixBuffer.SetData(ObjectMatrix);
-            m_PrefabMatrixBuffer.SetData(meshMatrix);
-            m_LightDataBuffer.SetData(m_instanceData.m_lightData);
-            
-            
-            ObjectMatrix.Dispose();
-            meshMatrix.Dispose();
-            oM.Dispose();
-            instanceMeshMatrix.Dispose();
-            jobHandles.Dispose();
-        }
-
+        
         protected override void UnRegiste()
         {
             m_jobGameJectData.Dispose();
-            m_rendereringGamerobj.Dispose();
             m_instanceEle.Dispose();
             m_viewElements.Dispose();
-            m_OriginMatrixBuffer.Dispose();
-            m_PrefabMatrixBuffer.Dispose();
-            m_LightDataBuffer.Dispose();
             foreach (var VARIABLE in m_lodInfos)
             {
                 VARIABLE.Dispose();
             }
-
+            m_treeNodeContainer.Get(m_root).Dispose();
             m_lodNumber.Dispose();
             m_lodPtr.Dispose();
-            m_root.Dispose();
             foreach (var subSector in m_subSectors)
             {
                 subSector.Dispose();
@@ -244,7 +188,7 @@ namespace Unity.MergeInstancingSystem.New
         {
             if(!m_castShadow)return;
             ShadowCull.Begin();
-            m_root.UpdateWithShadow(taskHandles, 0, planes);
+            m_treeNodeContainer.Get(m_root).UpdateWithShadow(taskHandles, 0, planes);
             ShadowCull.End();
         }
         
@@ -255,16 +199,8 @@ namespace Unity.MergeInstancingSystem.New
         public override void UpDateTree(in DPlane* planes, in float3 cameraPos,in float4x4 matrixProj,in NativeList<JobHandle> taskHandles)
         {
             TreeUpdate.Begin();
-            m_root.Update(taskHandles, 0, planes, cameraPos,matrixProj);
+            m_treeNodeContainer.Get(m_root).Update(taskHandles, 0, planes, cameraPos,matrixProj);
             TreeUpdate.End();
-        }
-        /// <summary>
-        /// 
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public override void InitView(in float3 cameraPos, in float4x4 matrixProj,in DPlane* planes,in NativeList<JobHandle> taskHandles)
-        {
-            
         }
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override void DispatchSetup(in NativeList<JobHandle> taskHandles,bool isShadow)
@@ -275,7 +211,8 @@ namespace Unity.MergeInstancingSystem.New
             {
                 if(!dElement.m_visible) continue;
                 var prefab = m_instanceSector[dElement.m_mark];
-                prefab.DispatchSetup(dElement.m_dataIndex, dElement.m_lightDataIndex, dElement.m_lodLevel, m_subSectors,
+                prefab.DispatchSetup(m_instanceData, dElement.m_renderDataIndex, dElement.m_lightDataIndex,
+                    dElement.m_lodLevel,
                     isShadow);
             }
             SubmitObj.End();
@@ -287,7 +224,7 @@ namespace Unity.MergeInstancingSystem.New
             foreach (var instanceSubSector in m_subSectors)
             {
                 if(instanceSubSector.renderObjectNumber == 0)continue;
-                instanceSubSector.DispatchDraw(cmdBuffer,m_OriginMatrixBuffer,m_PrefabMatrixBuffer,m_LightDataBuffer,passIndex,renderQueue);
+                instanceSubSector.DispatchDraw(cmdBuffer,m_instanceData,passIndex,renderQueue);
             }
             RenderingObj.End();
         }
@@ -300,7 +237,7 @@ namespace Unity.MergeInstancingSystem.New
             foreach (var instanceSubSector in m_subSectors)
             {
                 if (instanceSubSector.renderObjectNumber == 0) continue;
-                instanceSubSector.DispatchDrawShadow(cmdBuffer, m_OriginMatrixBuffer, m_PrefabMatrixBuffer, passIndex);
+                instanceSubSector.DispatchDrawShadow(cmdBuffer, m_instanceData, passIndex);
             }
             RenderingShadow.End();
         }
@@ -325,10 +262,9 @@ namespace Unity.MergeInstancingSystem.New
 
         public class PropertyID
         {
-            public readonly static int ObjectMatrixID = Shader.PropertyToID("_ObjectMatrixs");
-            public readonly static int MeshMatrixID = Shader.PropertyToID("_MeshMatrixs");
-            public readonly static int LightDataID = Shader.PropertyToID("_InstanceLightDatas");
-            public readonly static int InstanceIndexID = Shader.PropertyToID("_InstanceIndex");
+            public readonly static int ObjectMatrixID = Shader.PropertyToID("_Matrixs");
+            public readonly static int LightData = Shader.PropertyToID("_LightMapOffest");
+            public readonly static int InstanceIndexID = Shader.PropertyToID("_dataIndexAndLightIndex");
         }
         #endregion
     }

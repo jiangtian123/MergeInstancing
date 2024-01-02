@@ -2,8 +2,6 @@
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
-using Unity.MergeInstancingSystem.CustomData;
-using Unity.MergeInstancingSystem.New;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
